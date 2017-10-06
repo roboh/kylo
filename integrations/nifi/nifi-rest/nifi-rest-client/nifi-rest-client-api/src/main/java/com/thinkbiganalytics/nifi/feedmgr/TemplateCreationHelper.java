@@ -167,10 +167,7 @@ public class TemplateCreationHelper {
                 nifiClient.controllerServices().delete(groupControllerService.getId());
 
                 // Create root service
-                final ControllerServiceDTO rootControllerService = new ControllerServiceDTO();
-                rootControllerService.setComments(groupControllerService.getComments());
-                rootControllerService.setName(groupControllerService.getName());
-                rootControllerService.setType(groupControllerService.getType());
+                final ControllerServiceDTO rootControllerService = nifiClient.controllerServices().newControllerService(groupControllerService);
                 final String rootId = nifiClient.processGroups().createControllerService("root", rootControllerService).getId();
 
                 // Map old ID to new ID

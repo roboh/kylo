@@ -173,4 +173,13 @@ public interface NiFiControllerServicesRestClient {
      * @return the references that were updated
      */
     ControllerServiceReferencingComponentsEntity updateReferences(@Nonnull String id, @Nonnull UpdateControllerServiceReferenceRequestEntity update);
+
+    /**
+     * Creates a new instance of controller service based on the provided template of existing controller service
+     *
+     * @param templateControllerService the template for created controller service
+     *
+     * @return a new instance of controller service which can be registered by NiFi
+     */
+    ControllerServiceDTO newControllerService(ControllerServiceDTO templateControllerService);
 }

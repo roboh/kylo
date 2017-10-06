@@ -20,7 +20,9 @@ package com.thinkbiganalytics.nifi.v1.rest.client;
  * #L%
  */
 
+import org.apache.nifi.web.api.dto.BundleDTO;
 import org.apache.nifi.web.api.dto.ControllerServiceApiDTO;
+import org.apache.nifi.web.api.dto.ControllerServiceDTO;
 import org.apache.nifi.web.api.dto.DocumentedTypeDTO;
 import org.apache.nifi.web.api.entity.ControllerServiceTypesEntity;
 
@@ -69,5 +71,21 @@ public class NiFiControllerServicesRestClientV1_2  extends NiFiControllerService
         return Optional.ofNullable(client.get("/flow/controller-service-types", query, ControllerServiceTypesEntity.class))
             .map(ControllerServiceTypesEntity::getControllerServiceTypes)
             .orElseGet(Collections::emptySet);
+    }
+
+    @Override
+    public ControllerServiceDTO newControllerService(ControllerServiceDTO templateControllerService) {
+        ControllerServiceDTO controllerServiceDTO = new ControllerServiceDTO();
+        controllerServiceDTO.setComments(templateControllerService.getComments());
+        controllerServiceDTO.setName(templateControllerService.getName());
+        controllerServiceDTO.setType(templateControllerService.getType());
+        if (templateControllerService.getBundle() != null) {
+            BundleDTO bundle = new BundleDTO();
+            bundle.setArtifact(templateControllerService.getBundle().getArtifact());
+            bundle.setGroup(templateControllerService.getBundle().getGroup());
+            bundle.setVersion(templateControllerService.getBundle().getVersion());
+            controllerServiceDTO.setBundle(bundle);
+        }
+        return controllerServiceDTO;
     }
 }

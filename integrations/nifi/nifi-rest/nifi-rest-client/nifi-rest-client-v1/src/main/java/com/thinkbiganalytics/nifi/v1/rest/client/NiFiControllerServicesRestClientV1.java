@@ -192,4 +192,13 @@ public class NiFiControllerServicesRestClientV1 extends AbstractNiFiControllerSe
         update.getId();
         return client.put(BASE_PATH+id+"/references",update,ControllerServiceReferencingComponentsEntity.class);
     }
+
+    @Override
+    public ControllerServiceDTO newControllerService(ControllerServiceDTO templateControllerService) {
+        ControllerServiceDTO controllerServiceDTO = new ControllerServiceDTO();
+        controllerServiceDTO.setComments(templateControllerService.getComments());
+        controllerServiceDTO.setName(templateControllerService.getName());
+        controllerServiceDTO.setType(templateControllerService.getType());
+        return controllerServiceDTO;
+    }
 }
