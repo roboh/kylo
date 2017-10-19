@@ -177,7 +177,7 @@ public interface NiFiControllerServicesRestClient {
     /**
      * Creates a new instance of controller service based on the provided template of existing controller service
      *
-     * @param templateControllerService the template for created controller service
+     * @param templateControllerService the template of existing controller service
      *
      * @return a new instance of controller service which can be registered by NiFi
      */
