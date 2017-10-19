@@ -30,20 +30,28 @@ import com.thinkbiganalytics.DateTimeUtil;
 import com.thinkbiganalytics.alerts.api.Alert;
 import com.thinkbiganalytics.alerts.api.AlertCriteria;
 import com.thinkbiganalytics.alerts.api.AlertProvider;
+import com.thinkbiganalytics.alerts.spi.AlertManager;
+import com.thinkbiganalytics.metadata.api.MetadataAccess;
 import com.thinkbiganalytics.metadata.api.alerts.OperationalAlerts;
-import com.thinkbiganalytics.metadata.api.feed.DeleteFeedListener;
+import com.thinkbiganalytics.metadata.api.event.MetadataEventService;
 import com.thinkbiganalytics.metadata.api.feed.FeedHealth;
+import com.thinkbiganalytics.metadata.api.feed.FeedSummary;
 import com.thinkbiganalytics.metadata.api.feed.LatestFeedJobExecution;
 import com.thinkbiganalytics.metadata.api.feed.OpsManagerFeed;
-import com.thinkbiganalytics.metadata.api.feed.OpsManagerFeedChangedListener;
 import com.thinkbiganalytics.metadata.api.feed.OpsManagerFeedProvider;
 import com.thinkbiganalytics.metadata.api.jobrepo.ExecutionConstants;
 import com.thinkbiganalytics.metadata.api.jobrepo.job.BatchJobExecution;
 import com.thinkbiganalytics.metadata.api.jobrepo.job.BatchJobExecutionProvider;
 import com.thinkbiganalytics.metadata.api.jobrepo.job.JobStatusCount;
+import com.thinkbiganalytics.metadata.api.jobrepo.nifi.NifiFeedStatisticsProvider;
+import com.thinkbiganalytics.metadata.api.jobrepo.nifi.NifiFeedStats;
+import com.thinkbiganalytics.metadata.jpa.cache.AbstractCacheBackedProvider;
+import com.thinkbiganalytics.metadata.jpa.common.EntityAccessControlled;
 import com.thinkbiganalytics.metadata.jpa.jobrepo.job.JpaBatchJobExecutionStatusCounts;
 import com.thinkbiganalytics.metadata.jpa.jobrepo.job.QJpaBatchJobExecution;
 import com.thinkbiganalytics.metadata.jpa.jobrepo.job.QJpaBatchJobInstance;
+import com.thinkbiganalytics.metadata.jpa.sla.JpaServiceLevelAgreementDescription;
+import com.thinkbiganalytics.metadata.jpa.sla.JpaServiceLevelAgreementDescriptionRepository;
 import com.thinkbiganalytics.metadata.jpa.support.GenericQueryDslFilter;
 import com.thinkbiganalytics.metadata.jpa.support.JobStatusDslQueryExpressionBuilder;
 import com.thinkbiganalytics.security.AccessController;
@@ -58,29 +66,39 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.io.Serializable;
-import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import javax.annotation.PostConstruct;
 import javax.inject.Inject;
+import javax.inject.Named;
 
 /**
  * Provider allowing access to feeds {@link OpsManagerFeed}
  */
 @Service
-public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
+public class OpsFeedManagerFeedProvider extends AbstractCacheBackedProvider<OpsManagerFeed, OpsManagerFeed.ID> implements OpsManagerFeedProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OpsFeedManagerFeedProvider.class);
     @Inject
     BatchJobExecutionProvider batchJobExecutionProvider;
+
+    @Inject
+    NifiFeedStatisticsProvider nifiFeedStatisticsProvider;
+
     private OpsManagerFeedRepository repository;
     private FeedHealthRepository feedHealthRepository;
     private LatestFeedJobExectionRepository latestFeedJobExectionRepository;
     private BatchFeedSummaryCountsRepository batchFeedSummaryCountsRepository;
+    private JpaServiceLevelAgreementDescriptionRepository serviceLevelAgreementDescriptionRepository;
 
     @Autowired
     private JPAQueryFactory factory;
@@ -91,22 +109,63 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
     @Inject
     private AlertProvider alertProvider;
 
-    /**
-     * list of delete feed listeners
-     **/
-    private List<DeleteFeedListener> deleteFeedListeners = new ArrayList<>();
+    @Inject
+    @Named("kyloAlertManager")
+    private AlertManager alertManager;
 
-    private List<OpsManagerFeedChangedListener> feedChangedListeners = new ArrayList<>();
+    @Inject
+    private FeedSummaryRepository feedSummaryRepository;
 
+    @Inject
+    private MetadataEventService metadataEventService;
+
+    @Inject
+    private OpsManagerFeedCacheByName opsManagerFeedCacheByName;
+
+    @Inject
+    private OpsManagerFeedCacheById opsManagerFeedCacheById;
+
+    @Inject
+    private MetadataAccess metadataAccess;
+
+
+    @Override
+    public String getClusterMessageKey() {
+        return "OPS_MANAGER_FEED_CACHE";
+    }
+
+    @Override
+    public OpsManagerFeed.ID getId(OpsManagerFeed value) {
+        return value.getId();
+    }
+
+
+    @Override
+    public String getProviderName() {
+        return this.getClass().getName();
+    }
 
     @Autowired
     public OpsFeedManagerFeedProvider(OpsManagerFeedRepository repository, BatchFeedSummaryCountsRepository batchFeedSummaryCountsRepository,
                                       FeedHealthRepository feedHealthRepository,
-                                      LatestFeedJobExectionRepository latestFeedJobExectionRepository) {
+                                      LatestFeedJobExectionRepository latestFeedJobExectionRepository,
+                                      JpaServiceLevelAgreementDescriptionRepository serviceLevelAgreementDescriptionRepository) {
+        super(repository);
         this.repository = repository;
         this.batchFeedSummaryCountsRepository = batchFeedSummaryCountsRepository;
         this.feedHealthRepository = feedHealthRepository;
         this.latestFeedJobExectionRepository = latestFeedJobExectionRepository;
+        this.serviceLevelAgreementDescriptionRepository = serviceLevelAgreementDescriptionRepository;
+    }
+
+
+    @PostConstruct
+    private void init() {
+        subscribeListener(opsManagerFeedCacheByName);
+        subscribeListener(opsManagerFeedCacheById);
+        clusterService.subscribe(this);
+        //initially populate
+        metadataAccess.read(() -> populateCache(), MetadataAccess.SERVICE);
     }
 
     @Override
@@ -119,98 +178,118 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
     }
 
     @Override
+    @EntityAccessControlled
     public OpsManagerFeed findByName(String name) {
-        return repository.findByName(name);
+        // return repository.findByName(name);
+        return opsManagerFeedCacheByName.findById(name);
     }
 
+    public OpsManagerFeed findByNameWithoutAcl(String name) {
+        OpsManagerFeed feed = opsManagerFeedCacheByName.findByIdWithoutAcl(name);
+        if (feed == null) {
+            feed = repository.findByNameWithoutAcl(name);
+        }
+        return feed;
+    }
 
+    @EntityAccessControlled
     public OpsManagerFeed findById(OpsManagerFeed.ID id) {
-        return repository.findOne(id);
+        return opsManagerFeedCacheById.findById(id);
     }
 
+    @EntityAccessControlled
     public List<? extends OpsManagerFeed> findByFeedIds(List<OpsManagerFeed.ID> ids) {
-        if (ids != null && !ids.isEmpty()) {
-            if (accessController.isEntityAccessControlled()) {
-                return repository.findByFeedIdsWithAcl(ids);
-            } else {
-                return repository.findByFeedIdsWitouthAcl(ids);
-            }
-        }
-        return null;
+        return opsManagerFeedCacheById.findByIds(ids);
     }
 
+    public List<? extends OpsManagerFeed> findByFeedIdsWithoutAcl(List<OpsManagerFeed.ID> ids) {
+        if (ids != null) {
+            return opsManagerFeedCacheById.findByIdsWithoutAcl(new HashSet<>(ids));
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+
+    @EntityAccessControlled
     public List<? extends OpsManagerFeed> findByFeedNames(Set<String> feedNames) {
-        return findByFeedNames(feedNames, true);
+        return opsManagerFeedCacheByName.findByIds(feedNames, true);
     }
 
+    @EntityAccessControlled
     public List<? extends OpsManagerFeed> findByFeedNames(Set<String> feedNames, boolean addAclFilter) {
-        if (feedNames != null && !feedNames.isEmpty()) {
-            if (addAclFilter) {
-                return repository.findByNameWithoutAcl(feedNames);
-            } else {
-                return repository.findByNameWithoutAcl(feedNames);
-            }
-        }
-        return null;
-    }
-
-
-    public void save(List<? extends OpsManagerFeed> feeds) {
-        repository.save((List<JpaOpsManagerFeed>) feeds);
+        return opsManagerFeedCacheByName.findByIds(feedNames, addAclFilter);
     }
 
     @Override
-    public OpsManagerFeed save(OpsManagerFeed.ID feedManagerId, String systemName, boolean isStream, Long timeBetweenBatchJobs) {
-        OpsManagerFeed feed = findById(feedManagerId);
+    public void save(List<? extends OpsManagerFeed> feeds) {
+        saveList(feeds);
+    }
+
+    @Override
+    public OpsManagerFeed save(OpsManagerFeed.ID feedId, String systemName, boolean isStream, Long timeBetweenBatchJobs) {
+        OpsManagerFeed feed = repository.findOne(feedId);
         if (feed == null) {
             feed = new JpaOpsManagerFeed();
             ((JpaOpsManagerFeed) feed).setName(systemName);
-            ((JpaOpsManagerFeed) feed).setId((OpsManagerFeedId) feedManagerId);
+            ((JpaOpsManagerFeed) feed).setId((OpsManagerFeedId) feedId);
             ((JpaOpsManagerFeed) feed).setStream(isStream);
             ((JpaOpsManagerFeed) feed).setTimeBetweenBatchJobs(timeBetweenBatchJobs);
         } else {
             ((JpaOpsManagerFeed) feed).setStream(isStream);
             ((JpaOpsManagerFeed) feed).setTimeBetweenBatchJobs(timeBetweenBatchJobs);
         }
-        feed = repository.save((JpaOpsManagerFeed) feed);
-        notifyOnFeedChanged(feed);
+        feed = save(feed);
         return feed;
     }
 
     @Override
     public void delete(OpsManagerFeed.ID id) {
-        OpsManagerFeed feed = findById(id);
+        OpsManagerFeed feed = repository.findOne(id);
         if (feed != null) {
             log.info("Deleting feed {} ({})  and all job executions. ", feed.getName(), feed.getId());
             //first delete all jobs for this feed
             deleteFeedJobs(FeedNameUtil.category(feed.getName()), FeedNameUtil.feed(feed.getName()));
-            repository.delete(feed.getId());
-            //notify the listeners
-            notifyOnFeedDeleted(feed);
+            //remove an slas on this feed
+            List<JpaServiceLevelAgreementDescription> slas = serviceLevelAgreementDescriptionRepository.findForFeed(id);
+            if (slas != null && !slas.isEmpty()) {
+                serviceLevelAgreementDescriptionRepository.delete(slas);
+            }
+            delete(feed);
+
             log.info("Successfully deleted the feed {} ({})  and all job executions. ", feed.getName(), feed.getId());
         }
     }
 
     public boolean isFeedRunning(OpsManagerFeed.ID id) {
-        OpsManagerFeed feed = findById(id);
+        OpsManagerFeed feed = opsManagerFeedCacheById.findByIdWithoutAcl(id);
+        if (feed == null) {
+            feed = repository.findByIdWithoutAcl(id);
+        }
         if (feed != null) {
             return batchJobExecutionProvider.isFeedRunning(feed.getName());
         }
         return false;
     }
 
+    @EntityAccessControlled
     public List<OpsManagerFeed> findAll(String filter) {
         QJpaOpsManagerFeed feed = QJpaOpsManagerFeed.jpaOpsManagerFeed;
         return Lists.newArrayList(repository.findAll(GenericQueryDslFilter.buildFilter(feed, filter)));
     }
 
-
+    @EntityAccessControlled
     public List<String> getFeedNames() {
-        if (accessController.isEntityAccessControlled()) {
-            return repository.getFeedNamesWithAcl();
-        } else {
-            return repository.getFeedNamesWithoutAcl();
-        }
+        return opsManagerFeedCacheByName.findAll().stream().map(f -> f.getName()).collect(Collectors.toList());
+    }
+
+    public List<OpsManagerFeed> findAll() {
+        return opsManagerFeedCacheByName.findAll();
+    }
+
+    @EntityAccessControlled
+    public Map<String, List<OpsManagerFeed>> getFeedsGroupedByCategory() {
+        return opsManagerFeedCacheByName.findAll().stream().collect(Collectors.groupingBy(f -> FeedNameUtil.category(f.getName())));
     }
 
     public List<? extends FeedHealth> getFeedHealth() {
@@ -275,6 +354,7 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
      */
     public void deleteFeedJobs(String category, String feed) {
         repository.deleteFeedJobs(category, feed);
+        alertManager.updateLastUpdatedTime();
     }
 
     /**
@@ -285,12 +365,14 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
         String exitMessage = String.format("Job manually abandoned @ %s", DateTimeUtil.getNowFormattedWithTimeZone());
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         repository.abandonFeedJobs(feed, exitMessage, username);
+        //TODO Notify the JobExecution Cache of updates
 
         //all the alerts manager to handle all job failures
         AlertCriteria criteria = alertProvider.criteria().type(OperationalAlerts.JOB_FALURE_ALERT_TYPE).subtype(feed);
         Iterator<? extends Alert> alerts = alertProvider.getAlerts(criteria);
         StreamSupport.stream(Spliterators.spliteratorUnknownSize(alerts, Spliterator.ORDERED), false)
             .forEach(alert -> alertProvider.respondTo(alert.getId(), (alert1, response) -> response.handle(exitMessage)));
+        alertManager.updateLastUpdatedTime();
     }
 
     /**
@@ -310,7 +392,11 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
                         jobExecution.setStatus(BatchJobExecution.JobStatus.STOPPED);
                         jobExecution.setExitCode(ExecutionConstants.ExitCode.COMPLETED);
                         jobExecution.setEndTime(DateTime.now());
-                        batchJobExecutionProvider.save(jobExecution);
+                        jobExecution = batchJobExecutionProvider.save(jobExecution);
+                        batchJobExecutionProvider.notifyStopped(jobExecution, feed, null);
+                        //notify stream to batch for feed
+                        batchJobExecutionProvider.notifyStreamToBatch(jobExecution, feed);
+
                     }
                 } else if (!feed.isStream() && isStream) {
                     //if we move from a batch to a stream we need to complete any jobs that are running.
@@ -322,14 +408,15 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
                         batchJobExecutionProvider.save(jobExecution);
                         log.info("Stopping and Abandoning the Job {} for feed {}.  The job was running while the feed/template changed from a batch to a stream", jobExecution.getJobExecutionId(),
                                  feed.getName());
+                        batchJobExecutionProvider.notifyFailure(jobExecution, feed, false, null);
+                        //notify batch to stream for feed
+                        batchJobExecutionProvider.notifyBatchToStream(jobExecution, feed);
                     });
                 }
                 feed.setStream(isStream);
             }
-            repository.save(feeds);
+            save(feeds);
         }
-        feeds.stream().forEach(feed -> notifyOnFeedChanged(feed));
-
     }
 
 
@@ -355,30 +442,33 @@ public class OpsFeedManagerFeedProvider implements OpsManagerFeedProvider {
             for (JpaOpsManagerFeed feed : feeds) {
                 feed.setTimeBetweenBatchJobs(timeBetweenBatchJobs);
             }
-            repository.save(feeds);
+            save(feeds);
         }
-        feeds.stream().forEach(feed -> notifyOnFeedChanged(feed));
+
     }
 
-    /**
-     * Subscribe to feed deletion events
-     *
-     * @param listener a delete feed listener
-     */
-    public void subscribeFeedDeletion(DeleteFeedListener listener) {
-        deleteFeedListeners.add(listener);
+
+    public List<? extends FeedSummary> findFeedSummary() {
+        return feedSummaryRepository.findAll();
     }
 
-    public void notifyOnFeedDeleted(OpsManagerFeed feed) {
-        deleteFeedListeners.stream().forEach(listener -> listener.onFeedDelete(feed));
+    @Override
+    public DateTime getLastActiveTimeStamp(String feedName) {
+        DateTime lastFeedTime = null;
+        OpsManagerFeed feed = this.findByName(feedName);
+        if (feed.isStream()) {
+            NifiFeedStats feedStats = metadataAccess.read(() -> nifiFeedStatisticsProvider.findLatestStatsForFeed(feedName));
+            if (feedStats != null) {
+                lastFeedTime = new DateTime(feedStats.getLastActivityTimestamp());
+            }
+        } else {
+            BatchJobExecution jobExecution = metadataAccess.read(() -> batchJobExecutionProvider.findLatestCompletedJobForFeed(feedName));
+            if (jobExecution != null) {
+                lastFeedTime = jobExecution.getEndTime();
+            }
+        }
+        return lastFeedTime;
     }
 
-    public void subscribe(OpsManagerFeedChangedListener listener) {
-        feedChangedListeners.add(listener);
-    }
-
-    public void notifyOnFeedChanged(OpsManagerFeed feed) {
-        feedChangedListeners.stream().forEach(listener -> listener.onFeedChange(feed));
-    }
 
 }

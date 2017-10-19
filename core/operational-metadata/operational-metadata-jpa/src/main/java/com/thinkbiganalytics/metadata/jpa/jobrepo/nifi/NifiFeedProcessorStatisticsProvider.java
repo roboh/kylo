@@ -84,7 +84,7 @@ public class NifiFeedProcessorStatisticsProvider implements com.thinkbiganalytic
     @Override
     public NifiFeedProcessorStats create(NifiFeedProcessorStats t) {
         NifiFeedProcessorStats stats = statisticsRepository.save((JpaNifiFeedProcessorStats) t);
-        ItemLastModified lastModified = itemLastModifiedProvider.update(getLastModifiedKey(t.getClusterNodeId()), t.getMaxEventId().toString());
+       // ItemLastModified lastModified = itemLastModifiedProvider.update(getLastModifiedKey(t.getClusterNodeId()), t.getMaxEventId().toString());
         return stats;
     }
 
@@ -225,7 +225,7 @@ public class NifiFeedProcessorStatisticsProvider implements com.thinkbiganalytic
                        .and(stats.minEventTime.goe(start)
                                 .and(stats.maxEventTime.loe(end))))
 
-            .groupBy(stats.feedName, stats.maxEventTime)
+            .groupBy(stats.feedName, stats.maxEventTime, stats.collectionIntervalSeconds)
             .orderBy(stats.maxEventTime.asc());
 
         return (List<JpaNifiFeedProcessorStats>) query.fetch();

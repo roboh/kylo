@@ -97,6 +97,12 @@ define([], function () {
         this.SLA_EDIT = "editServiceLevelAgreements";
 
         /**
+         * Allows users to create new Service Level agreements
+         * @type {string}
+         */
+        this.SLA_EMAIL_TEMPLATES_ACCESS = null;//"accessSLAEmailTemplates";
+
+        /**
          * Allows access to feed templates.
          * @type {string}
          */
@@ -140,7 +146,7 @@ define([], function () {
 
         /**
          * Allows access to user and group-related functions.
-         * @type {string}
+         * @type {string}TEMPLATES_IMPORT
          */
         this.USERS_GROUPS_ACCESS = "accessUsersGroupsSupport";
 
@@ -210,6 +216,8 @@ define([], function () {
          */
         this.GLOBAL_SEARCH_ACCESS = "accessSearch";
 
+        this.ADMIN_METADATA= "adminMetadata";
+
         this.ENTITY_ACCESS = {
             CATEGORY: {
                 //   EDIT_CATEGORY_SUMMARY: "editCategorySummary", // will not be used in v 0.8.0
@@ -257,6 +265,7 @@ define([], function () {
             GROUP_DETAILS: {state: "group-details", permissions: [this.USERS_GROUPS_ACCESS]},
             VISUAL_QUERY: {state: "visual-query", permissions: [this.VISUAL_QUERY_ACCESS]},
             SERVICE_LEVEL_AGREEMENTS: {state: "service-level-agreements", permissions: [this.SLA_ACCESS]},
+            SERVICE_LEVEL_AGREEMENT_EMAIL_TEMPLATES: {state: "sla-email-templates", permissions: []},
             TABLES: {state: "tables", permissions: [this.TABLES_ACCESS]},
             TABLE: {state: "table", permissions: [this.TABLES_ACCESS]},
             DATASOURCES: {state: "datasources", permissions: [this.DATASOURCE_ACCESS]},
@@ -269,6 +278,7 @@ define([], function () {
             SEARCH: {state: "search", permissions: []},
             DOMAIN_TYPES: {state: "domain-types", permissions: [this.FEEDS_ADMIN]},
             DOMAIN_TYPE_DETAILS: {state: "domain-type-details", permissions: [this.FEEDS_ADMIN]},
+            JCR_ADMIN:{state:"jcr-query",permissions:[this.ADMIN_METADATA]},
             //Ops Manager
             ALERTS: {state: "alerts", permissions: [this.OPERATIONS_MANAGER_ACCESS]},
             ALERT_DETAILS: {state: "alert-details", permissions: [this.OPERATIONS_MANAGER_ACCESS]},

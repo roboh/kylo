@@ -28,6 +28,7 @@ import com.thinkbiganalytics.discovery.schema.QueryResult;
 import com.thinkbiganalytics.feedmgr.rest.model.EditFeedEntity;
 import com.thinkbiganalytics.feedmgr.rest.model.FeedMetadata;
 import com.thinkbiganalytics.feedmgr.rest.model.FeedSummary;
+import com.thinkbiganalytics.feedmgr.rest.model.FeedVersions;
 import com.thinkbiganalytics.feedmgr.rest.model.NifiFeed;
 import com.thinkbiganalytics.feedmgr.rest.model.UIFeed;
 import com.thinkbiganalytics.feedmgr.security.FeedServicesAccessControl;
@@ -45,6 +46,8 @@ import com.thinkbiganalytics.hive.service.HiveService;
 import com.thinkbiganalytics.hive.util.HiveUtils;
 import com.thinkbiganalytics.metadata.FeedPropertySection;
 import com.thinkbiganalytics.metadata.FeedPropertyType;
+import com.thinkbiganalytics.metadata.api.security.MetadataAccessControl;
+import com.thinkbiganalytics.metadata.modeshape.versioning.VersionNotFoundException;
 import com.thinkbiganalytics.metadata.rest.model.data.DatasourceDefinition;
 import com.thinkbiganalytics.metadata.rest.model.data.DatasourceDefinitions;
 import com.thinkbiganalytics.metadata.rest.model.feed.FeedLineageStyle;
@@ -61,7 +64,6 @@ import com.thinkbiganalytics.security.rest.model.ActionGroup;
 import com.thinkbiganalytics.security.rest.model.PermissionsChange;
 import com.thinkbiganalytics.security.rest.model.PermissionsChange.ChangeType;
 import com.thinkbiganalytics.security.rest.model.RoleMembershipChange;
-import com.thinkbiganalytics.security.rest.model.RoleMemberships;
 import com.thinkbiganalytics.support.FeedNameUtil;
 
 import org.apache.commons.lang3.StringUtils;
@@ -72,7 +74,6 @@ import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.hibernate.JDBCException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -93,7 +94,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -140,6 +140,7 @@ public class FeedRestController {
     private static final ResourceBundle STRINGS = ResourceBundle.getBundle("com.thinkbiganalytics.feedmgr.rest.controller.FeedMessages");
     private static final int MAX_LIMIT = 1000;
     private static final String NAMES = "/names";
+    private static final String SUMMARY = "/feed-summary";
 
     @Inject
     private MetadataService metadataService;
@@ -235,7 +236,7 @@ public class FeedRestController {
                 Object value = FieldUtils.readField(annotatedFieldProperty.getField(), modifiedFeedMetadata);
                 FieldUtils.writeField(annotatedFieldProperty.getField(), targetFeedMetadata, value);
             } catch (IllegalAccessException e) {
-                e.printStackTrace();
+                log.warn("Unable to update FeedMetadata field: {}.  Exception: {} ", annotatedFieldProperty.getField(), e.getMessage(), e);
             }
         });
 
@@ -315,7 +316,9 @@ public class FeedRestController {
         return Response.ok(feed).build();
     }
 
+
     @GET
+    @Deprecated
     @Path(NAMES)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Gets the list of feed summaries.")
@@ -323,6 +326,18 @@ public class FeedRestController {
         @ApiResponse(code = 200, message = "Returns a list of feeds.", response = FeedSummary.class, responseContainer = "List")
     )
     public Response getFeedNames() {
+        Collection<FeedSummary> feeds = getMetadataService().getFeedSummaryData();
+        return Response.ok(feeds).build();
+    }
+
+    @GET
+    @Path(SUMMARY)
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation("Gets the list of feed summaries.")
+    @ApiResponses(
+        @ApiResponse(code = 200, message = "Returns a list of feeds.", response = FeedSummary.class, responseContainer = "List")
+    )
+    public Response getFeedSummaries() {
         Collection<FeedSummary> feeds = getMetadataService().getFeedSummaryData();
         return Response.ok(feeds).build();
     }
@@ -452,6 +467,45 @@ public class FeedRestController {
         }
     }
 
+    @GET
+    @Path("/{feedId}/versions")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation("Updates a feed with the latest template metadata.")
+    @ApiResponses({
+                      @ApiResponse(code = 200, message = "Returns the feed versions.", response = FeedMetadata.class),
+                      @ApiResponse(code = 500, message = "The feed is unavailable.", response = RestResponseStatus.class)
+                  })
+    public Response getFeedVersions(@PathParam("feedId") String feedId,
+                                    @QueryParam("content") @DefaultValue("true") boolean includeContent) {
+        FeedVersions feed = getMetadataService().getFeedVersions(feedId, includeContent);
+
+        return Response.ok(feed).build();
+    }
+
+    @GET
+    @Path("/{feedId}/versions/{versionId}")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation("Updates a feed with the latest template metadata.")
+    @ApiResponses({
+                      @ApiResponse(code = 200, message = "Returns the feed versions.", response = FeedMetadata.class),
+                      @ApiResponse(code = 400, message = "Returns the feed or version does not exist.", response = FeedMetadata.class),
+                      @ApiResponse(code = 500, message = "The feed is unavailable.", response = RestResponseStatus.class)
+                  })
+    public Response getFeedVersion(@PathParam("feedId") String feedId,
+                                   @PathParam("versionId") String versionId,
+                                   @QueryParam("content") @DefaultValue("true") boolean includeContent) {
+        try {
+            return getMetadataService().getFeedVersion(feedId, versionId, includeContent)
+                .map(version -> Response.ok(version).build())
+                .orElse(Response.status(Status.NOT_FOUND).build());
+        } catch (VersionNotFoundException e) {
+            return Response.status(Status.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("Unexpected exception retrieving the feed version", e);
+            throw new InternalServerErrorException("Unexpected exception retrieving the feed version");
+        }
+    }
+
     @POST
     @Path("/{feedId}/merge-template")
     @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_FORM_URLENCODED})
@@ -576,12 +630,12 @@ public class FeedRestController {
                       @ApiResponse(code = 200, message = "Returns the role memberships.", response = ActionGroup.class),
                       @ApiResponse(code = 404, message = "A feed with the given ID does not exist.", response = RestResponseStatus.class)
                   })
-    public Response getRoleMemberships(@PathParam("feedId") String feedIdStr, 
+    public Response getRoleMemberships(@PathParam("feedId") String feedIdStr,
                                        @QueryParam("verbose") @DefaultValue("false") boolean verbose) {
         // TODO: No longer using verbose; all results are verbose now.
         return this.securityService.getFeedRoleMemberships(feedIdStr)
-                        .map(m -> Response.ok(m).build())
-                        .orElseThrow(() -> new WebApplicationException("A feed with the given ID does not exist: " + feedIdStr, Status.NOT_FOUND));
+            .map(m -> Response.ok(m).build())
+            .orElseThrow(() -> new WebApplicationException("A feed with the given ID does not exist: " + feedIdStr, Status.NOT_FOUND));
     }
 
 
@@ -732,6 +786,35 @@ public class FeedRestController {
         }
         return Response.ok(sla).build();
     }
+
+    @POST
+    @Path("/update-all-datasources")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation(
+        "Updates ALL  sources/destinations used for the feed lineage for ALL feeds.  WARNING: This will be an expensive call if you have lots of feeds.  This will remove all existing sources/destinations and revaluate the feed and its template for sources/destinations")
+    @ApiResponses({
+                      @ApiResponse(code = 200, message = "All the feed datasources were updated", response = RestResponseStatus.class),
+                  })
+    public Response updateAllFeedDataSources() {
+        this.accessController.checkPermission(AccessController.SERVICES, MetadataAccessControl.ADMIN_METADATA);
+        getMetadataService().updateAllFeedsDatasources();
+        return Response.ok(new RestResponseStatus.ResponseStatusBuilder().buildSuccess()).build();
+    }
+
+
+    @POST
+    @Path("/{feedId}/update-datasources")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation("Updates a feeds sources/destinations used for the FeedLineage.  This will remove all existing sources/destinations and revaluate the feed and its template for sources/destinations")
+    @ApiResponses({
+                      @ApiResponse(code = 200, message = "the datasources were updated", response = RestResponseStatus.class),
+                  })
+    public Response updateFeedDatasources(@PathParam("feedId") String feedId) {
+        this.accessController.checkPermission(AccessController.SERVICES, MetadataAccessControl.ADMIN_METADATA);
+        getMetadataService().updateFeedDatasources(feedId);
+        return Response.ok(new RestResponseStatus.ResponseStatusBuilder().buildSuccess()).build();
+    }
+
 
     @POST
     @Path("/update-feed-lineage-styles")

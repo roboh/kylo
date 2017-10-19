@@ -1,7 +1,7 @@
-define(['angular', 'kylo-common', 'kylo-services',
+define(['angular', 'kylo-common', '@uirouter/angular', 'kylo-services',
         'main/IndexController',
         'main/HomeController',
-        'main/AccessDeniedController'], function (angular, app, lazyLoadUtil) {
+        'main/AccessDeniedController'], function (angular, app, uirouter) {
     'use strict';
     app.config(["$ocLazyLoadProvider", "$stateProvider", "$urlRouterProvider", function ($ocLazyLoadProvider, $stateProvider, $urlRouterProvider) {
 
@@ -11,7 +11,40 @@ define(['angular', 'kylo-common', 'kylo-services',
             debug: false
         });
 
-        $urlRouterProvider.otherwise("/home");
+        function onOtherwise(AngularModuleExtensionService, $state,url){
+            var stateData = AngularModuleExtensionService.stateAndParamsForUrl(url);
+            if(stateData.valid) {
+                $state.go(stateData.state,stateData.params);
+            }
+            else {
+                $state.go('home')
+            }
+        }
+
+        $urlRouterProvider.otherwise(function($injector, $location){
+            var $state = $injector.get('$state');
+            var svc = $injector.get('AngularModuleExtensionService');
+            var url = $location.url();
+            if(svc != null) {
+                if (svc.isInitialized()) {
+                    onOtherwise(svc,$state,url)
+                    return true;
+                }
+                else {
+                    $injector.invoke(function ($window, $state,AngularModuleExtensionService) {
+                        AngularModuleExtensionService.registerModules().then(function () {
+                            onOtherwise(AngularModuleExtensionService,$state,url)
+                            return true;
+                        });
+                    });
+                    return true;
+                }
+            }
+            else {
+                $location.url("/home")
+            }
+
+        });
 
         $stateProvider
             .state('home', {
@@ -44,21 +77,26 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading feeds ", err);
                     return err;
                 });
-                ;
             }
         }).state({
             name: 'define-feed.**',
-            url: '/define-feed',
+            url: '/define-feed?templateId&templateName&feedDescriptor',
+            params: {
+                templateId:null,
+                templateName:null,
+                feedDescriptor:null,
+                bcExclude_cloning:null,
+                bcExclude_cloneFeedName:null
+            },
             lazyLoad: function (transition) {
                 transition.injector().get('$ocLazyLoad').load('feed-mgr/feeds/define-feed/module').then(function success(args) {
                     //upon success go back to the state
-                    $stateProvider.stateService.go('define-feed')
+                    $stateProvider.stateService.go('define-feed', transition.params())
                     return args;
                 }, function error(err) {
                     console.log("Error loading define-feed ", err);
                     return err;
                 });
-                ;
             }
         }).state({
             name: 'feed-details.**',
@@ -76,7 +114,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading feed-details ", err);
                     return err;
                 });
-                ;
             }
         }).state({
             name: 'edit-feed.**',
@@ -93,7 +130,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading edit-feed", err);
                     return err;
                 });
-                ;
             }
         })
 
@@ -109,7 +145,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading categories ", err);
                     return err;
                 });
-                ;
             }
         }).state('category-details.**', {
             url: '/category-details/{categoryId}',
@@ -125,7 +160,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading categories ", err);
                     return err;
                 });
-                ;
             }
         });
 
@@ -140,7 +174,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading registered-templates ", err);
                     return err;
                 });
-                ;
             }
         })
 
@@ -155,7 +188,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading register-template ", err);
                     return err;
                 });
-                ;
             }
         })
 
@@ -174,7 +206,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading service-level-agreements ", err);
                     return err;
                 });
-                ;
             }
         });
 
@@ -208,7 +239,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading table ", err);
                     return err;
                 });
-                ;
             }
         });
 
@@ -240,7 +270,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading groups ", err);
                     return err;
                 });
-                ;
             }
         });
 
@@ -258,7 +287,6 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading search ", err);
                     return err;
                 });
-                ;
             }
         });
 
@@ -274,20 +302,22 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading business-metadata ", err);
                     return err;
                 });
-                ;
             }
         });
 
         $stateProvider.state({
             name: 'visual-query.**',
-            url: '/visual-query',
+            url: '/visual-query/{engine}',
+            params: {
+                engine: null
+            },
             lazyLoad: function (transition) {
                 transition.injector().get('$ocLazyLoad').load('feed-mgr/visual-query/module').then(function success(args) {
                     //upon success go back to the state
-                    $stateProvider.stateService.go('visual-query')
+                    $stateProvider.stateService.go('visual-query', transition.params());
                     return args;
                 }, function error(err) {
-                    console.log("Error loading business-metadata ", err);
+                    console.log("Error loading visual query", err);
                     return err;
                 });
             }
@@ -367,6 +397,10 @@ define(['angular', 'kylo-common', 'kylo-services',
         $stateProvider.state({
             name: 'jobs.**',
             url: '/jobs',
+            params: {
+                filter: null,
+                tab:null
+            },
             lazyLoad: function (transition) {
                 transition.injector().get('$ocLazyLoad').load('ops-mgr/jobs/module').then(function success(args) {
                     //upon success go back to the state
@@ -597,10 +631,55 @@ define(['angular', 'kylo-common', 'kylo-services',
                     console.log("Error loading admin jcr ", err);
                     return err;
                 });
-                ;
             }
         });
 
+        $stateProvider.state('sla-email-templates.**', {
+            url: '/sla-email-templates',
+            lazyLoad: function (transition) {
+                transition.injector().get('$ocLazyLoad').load('feed-mgr/sla/module').then(function success(args) {
+                    //upon success go back to the state
+                    $stateProvider.stateService.go('sla-email-templates',transition.params())
+                    return args;
+                }, function error(err) {
+                    console.log("Error loading sla email templates ", err);
+                    return err;
+                });
+            }
+        });
+
+        $stateProvider.state({
+            name: 'sla-email-template.**',
+            url: '/sla-email-template/:emailTemplateId',
+            params: {
+                emailTemplateId: null
+            },
+            lazyLoad: function (transition) {
+                transition.injector().get('$ocLazyLoad').load('feed-mgr/sla/module').then(function success(args) {
+                    //upon success go back to the state
+                    $stateProvider.stateService.go('sla-email-template',transition.params())
+                    return args;
+                }, function error(err) {
+                    console.log("Error loading sla email template ", err);
+                    return err;
+                });
+
+            }
+        });
+
+        $stateProvider.state('cluster.**', {
+            url: '/admin/cluster',
+            lazyLoad: function (transition) {
+                transition.injector().get('$ocLazyLoad').load('admin/module').then(function success(args) {
+                    //upon success go back to the state
+                    $stateProvider.stateService.go('cluster',transition.params())
+                    return args;
+                }, function error(err) {
+                    console.log("Error loading admin cluster ", err);
+                    return err;
+                });
+            }
+        });
 
         $stateProvider.state({
            name:'access-denied',
@@ -672,7 +751,6 @@ define(['angular', 'kylo-common', 'kylo-services',
               * and redirect if not authorized
               */
              $transitions.onStart({}, function (trans) {
-
                  if (AngularModuleExtensionService.isInitialized()) {
                      return onStartOfTransition(trans);
                  }

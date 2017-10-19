@@ -110,6 +110,10 @@ define(['angular', 'services/module-name'], function (angular, moduleName) {
                 $state.go('define-feed', {templateId: templateId});
             }
 
+            data.navigateToCloneFeed = function (feedName) {
+                $state.go('define-feed', {templateId: null,bcExclude_cloning:true,bcExclude_cloneFeedName:feedName});
+            }
+
             data.navigateToDefineFeedComplete = function (feedModel, error) {
                 $state.go('define-feed-complete', {feedModel: feedModel, error: error});
             }
@@ -160,6 +164,9 @@ define(['angular', 'services/module-name'], function (angular, moduleName) {
             }
             data.navigateToServiceLevelAgreement = function (slaId) {
                 $state.go('service-level-agreements',{slaId:slaId});
+            }
+            data.navigateToNewEmailTemplate = function (templateId) {
+                $state.go('sla-email-template',{emailTemplateId:templateId});
             }
             return data;
         }
@@ -232,6 +239,9 @@ define(['angular', 'services/module-name'], function (angular, moduleName) {
             var data = {};
             data.navigateToJobDetails = function (executionId) {
                 $state.go('job-details', {executionId: executionId});
+            }
+            data.navigateToJobs = function (tab,filter) {
+                $state.go('jobs', {tab:tab,filter: filter});
             }
             return data;
         }

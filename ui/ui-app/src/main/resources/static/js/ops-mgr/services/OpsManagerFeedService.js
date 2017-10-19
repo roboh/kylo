@@ -13,7 +13,7 @@ define(['angular','ops-mgr/module-name'], function (angular,moduleName) {
          data.fetchFeedHealthInterval = null;
          data.feedHealth = {};
 
-         data.SPECIFIC_FEED_HEALTH_COUNT_URL = OpsManagerRestUrlService.SPECIFIC_FEED_HEALTH_COUNT_URL;
+        // data.SPECIFIC_FEED_HEALTH_COUNT_URL = OpsManagerRestUrlService.SPECIFIC_FEED_HEALTH_COUNT_URL;
 
          data.SPECIFIC_FEED_HEALTH_URL = OpsManagerRestUrlService.SPECIFIC_FEED_HEALTH_URL;
 
@@ -57,6 +57,11 @@ define(['angular','ops-mgr/module-name'], function (angular,moduleName) {
              }
              else if ("COMPLETED" == feed.lastExitCode) {
                  feed.displayStatus = 'COMPLETED';
+             }
+             else if ("UNKNOWN" == feed.lastStatus) {
+                 feed.displayStatus = 'INITIAL';
+                 feed.sinceTimeString = '--';
+                 feed.runTimeString = "--"
              }
              else {
                  feed.displayStatus = feed.lastStatus;

@@ -33,10 +33,12 @@ public class DefaultQueryResultColumn implements QueryResultColumn {
     private String hiveColumnLabel;
     private String field;
     private String dataType;
+    private String nativeDataType;
     private String tableName;
     private String databaseName;
     private int index;
     private String comment;
+    private String precisionScale;
 
     @Override
     public String getField() {
@@ -56,6 +58,16 @@ public class DefaultQueryResultColumn implements QueryResultColumn {
     @Override
     public void setDataType(String dataType) {
         this.dataType = dataType;
+    }
+
+    @Override
+    public String getNativeDataType() {
+        return nativeDataType;
+    }
+
+    @Override
+    public void setNativeDataType(String nativeDataType) {
+        this.nativeDataType = nativeDataType;
     }
 
     @Override
@@ -116,5 +128,13 @@ public class DefaultQueryResultColumn implements QueryResultColumn {
     @Override
     public void setComment(String comment) {
         this.comment = comment;
+    }
+
+    public String getPrecisionScale() {
+        return precisionScale;
+    }
+
+    public void setPrecisionScale(String precisionScale) {
+        this.precisionScale = precisionScale;
     }
 }

@@ -8,7 +8,7 @@ define([
     'angularAnimate',
     'angularAria',
     'angularMessages',
-    'angular-ui-router',
+    '@uirouter/angularjs',
     'angular-material-expansion-panel',
     'angular-material-icons',
     'angular-material-data-table',
@@ -29,13 +29,14 @@ define([
         window.moment = moment;
     }
 
-     var module = angular.module("kylo", ['ui.router', 'oc.lazyLoad', 'ngMaterial','material.components.expansionPanels','md.data.table','ngMdIcons','angularUtils.directives.dirPagination','kylo.common','kylo.services','kylo.side-nav','ngFx','ngAnimate','ngSanitize','ngTextTruncate',    'ui.grid',
+     var module = angular.module("kylo", ['ui.router', 'ui.router.upgrade', 'oc.lazyLoad', 'ngMaterial','material.components.expansionPanels','md.data.table','ngMdIcons',
+                                          'angularUtils.directives.dirPagination','kylo.common','kylo.services','kylo.side-nav','ngFx','ngAnimate','ngSanitize','ngTextTruncate', 'ui.grid',
                                           'ui.grid.resizeColumns',
                                           'ui.grid.autoResize',
                                           'ui.grid.moveColumns',
                                           'ui.grid.pagination', 'ngMessages']);
 
-    module.config(['$mdAriaProvider','$mdThemingProvider','$mdIconProvider',function($mdAriaProvider,$mdThemingProvider, $mdIconProvider){
+    module.config(['$mdAriaProvider','$mdThemingProvider','$mdIconProvider','$urlServiceProvider','ngMdIconServiceProvider', function($mdAriaProvider,$mdThemingProvider, $mdIconProvider, $urlService, ngMdIconServiceProvider){
        //disable the aria-label warnings in the console
         $mdAriaProvider.disableWarnings();
 
@@ -60,6 +61,13 @@ define([
 
         $mdThemingProvider.setDefaultTheme('kylo');
 
+        // Tell UI-Router to wait to synchronize the URL (until all bootstrapping is complete)e
+        $urlService.deferIntercept();
+
+        // Register custom fonts
+        ngMdIconServiceProvider
+            .addShape('fa-database', '<path d="M896 768q237 0 443-43t325-127v170q0 69-103 128t-280 93.5-385 34.5-385-34.5-280-93.5-103-128v-170q119 84 325 127t443 43zm0 768q237 0 443-43t325-127v170q0 69-103 128t-280 93.5-385 34.5-385-34.5-280-93.5-103-128v-170q119 84 325 127t443 43zm0-384q237 0 443-43t325-127v170q0 69-103 128t-280 93.5-385 34.5-385-34.5-280-93.5-103-128v-170q119 84 325 127t443 43zm0-1152q208 0 385 34.5t280 93.5 103 128v128q0 69-103 128t-280 93.5-385 34.5-385-34.5-280-93.5-103-128v-128q0-69 103-128t280-93.5 385-34.5z"/>')
+            .addViewBox('fa-database', '0 0 1792 1792');
     }]);
 
 

@@ -83,20 +83,22 @@ public class StreamingFeedService {
             Feed.State state = metadataEvent.getData().getFeedState();
             if (feedName.isPresent()) {
                 metadataAccess.commit(() -> {
-                    OpsManagerFeed feed = opsManagerFeedProvider.findByName(feedName.get());
+                    OpsManagerFeed feed = opsManagerFeedProvider.findByNameWithoutAcl(feedName.get());
                     if (feed != null && feed.isStream()) {
                         //update the job status
                         BatchJobExecution jobExecution = batchJobExecutionProvider.findLatestJobForFeed(feedName.get());
-                        if (state.equals(Feed.State.ENABLED)) {
-                            jobExecution.setStatus(BatchJobExecution.JobStatus.STARTED);
-                            jobExecution.setExitCode(ExecutionConstants.ExitCode.EXECUTING);
-                            jobExecution.setStartTime(DateTime.now());
-                        } else {
-                            jobExecution.setStatus(BatchJobExecution.JobStatus.STOPPED);
-                            jobExecution.setExitCode(ExecutionConstants.ExitCode.COMPLETED);
-                            jobExecution.setEndTime(DateTime.now());
+                        if(jobExecution != null) {
+                            if (state.equals(Feed.State.ENABLED)) {
+                                jobExecution.setStatus(BatchJobExecution.JobStatus.STARTED);
+                                jobExecution.setExitCode(ExecutionConstants.ExitCode.EXECUTING);
+                                jobExecution.setStartTime(DateTime.now());
+                            } else {
+                                jobExecution.setStatus(BatchJobExecution.JobStatus.STOPPED);
+                                jobExecution.setExitCode(ExecutionConstants.ExitCode.COMPLETED);
+                                jobExecution.setEndTime(DateTime.now());
+                            }
+                            batchJobExecutionProvider.save(jobExecution);
                         }
-                        batchJobExecutionProvider.save(jobExecution);
                     }
                 }, MetadataAccess.SERVICE);
             }

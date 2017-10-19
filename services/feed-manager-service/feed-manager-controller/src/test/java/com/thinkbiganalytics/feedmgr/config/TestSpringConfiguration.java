@@ -20,8 +20,13 @@ package com.thinkbiganalytics.feedmgr.config;
  * #L%
  */
 
+import com.thinkbiganalytics.app.ServicesApplicationStartup;
 import com.thinkbiganalytics.cluster.ClusterService;
 import com.thinkbiganalytics.cluster.JGroupsClusterService;
+import com.thinkbiganalytics.common.velocity.service.InMemoryVelocityTemplateProvider;
+import com.thinkbiganalytics.common.velocity.service.VelocityTemplateProvider;
+import com.thinkbiganalytics.metadata.api.sla.ServiceLevelAgreementActionTemplateProvider;
+import com.thinkbiganalytics.nifi.rest.NiFiObjectCache;
 import com.thinkbiganalytics.feedmgr.nifi.NifiConnectionService;
 import com.thinkbiganalytics.feedmgr.nifi.cache.NifiFlowCache;
 import com.thinkbiganalytics.feedmgr.nifi.PropertyExpressionResolver;
@@ -38,6 +43,7 @@ import com.thinkbiganalytics.feedmgr.service.feed.InMemoryFeedManagerFeedService
 import com.thinkbiganalytics.feedmgr.service.template.FeedManagerTemplateService;
 import com.thinkbiganalytics.feedmgr.service.template.InMemoryFeedManagerTemplateService;
 import com.thinkbiganalytics.feedmgr.service.template.NiFiTemplateCache;
+import com.thinkbiganalytics.feedmgr.service.template.RegisteredTemplateCache;
 import com.thinkbiganalytics.feedmgr.service.template.RegisteredTemplateService;
 import com.thinkbiganalytics.feedmgr.service.template.RegisteredTemplateUtil;
 import com.thinkbiganalytics.feedmgr.service.template.TemplateModelTransform;
@@ -476,4 +482,31 @@ public class TestSpringConfiguration {
     ServiceLevelAgreementDescriptionProvider serviceLevelAgreementDescriptionProvider(){
         return Mockito.mock(ServiceLevelAgreementDescriptionProvider.class);
     }
+
+
+    @Bean
+    public NiFiObjectCache createFeedBuilderCache(){
+        return new NiFiObjectCache();
+    }
+
+    @Bean
+    public RegisteredTemplateCache registeredTemplateCache() {
+        return new RegisteredTemplateCache();
+    }
+
+    @Bean
+    public ServicesApplicationStartup servicesApplicationStartup(){
+        return Mockito.mock(ServicesApplicationStartup.class);
+    }
+
+    @Bean
+    public VelocityTemplateProvider velocityTemplateProvider() {
+        return new InMemoryVelocityTemplateProvider();
+    }
+
+    @Bean
+    public ServiceLevelAgreementActionTemplateProvider serviceLevelAgreementActionTemplateProvider() {
+        return Mockito.mock(ServiceLevelAgreementActionTemplateProvider.class);
+    }
+
 }
