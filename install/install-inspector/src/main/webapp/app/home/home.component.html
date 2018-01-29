@@ -22,21 +22,41 @@
         <div class="subtitle muted">This application will check your Kylo configuration by reading its properties and assessing their values</div>
 
         <div class="form" fxLayout="column" fxLayoutAlign="space-evenly start">
-            <mat-form-field class="path">
-                <input matInput placeholder="Absolute path to Kylo installation, e.g. /opt/kylo" [formControl]="path" required>
-                <mat-error *ngIf="path.invalid">{{getErrorMessage()}}</mat-error>
-            </mat-form-field>
-            <mat-checkbox [formControl]="selectAll">Enable All</mat-checkbox>
-            <div>
-                <mat-checkbox [formControl]="devMode">Running from source</mat-checkbox>
-                <div class="devmode-hint muted">Check this if you are inspecting Kylo configuration checked out from Git</div>
+            <div fxLayout="row" fxLayoutAlign="start center">
+                <mat-form-field class="path">
+                    <input matInput placeholder="Absolute path to Kylo installation, e.g. /opt/kylo" [formControl]="path" required>
+                    <mat-error *ngIf="path.invalid">{{getErrorMessage()}}</mat-error>
+                </mat-form-field>
+                <mat-chip-list *ngIf="configuration !== undefined">
+                    <mat-chip *ngIf="configuration.version">{{configuration.version}}</mat-chip>
+                    <mat-chip *ngIf="configuration.buildDate">{{configuration.buildDate}}</mat-chip>
+                    <small class="release-notes-link"><a *ngIf="configuration.version" target="_blank" href="http://kylo.readthedocs.io/en/latest/release-notes/ReleaseNotes.html">Release Notes</a></small>
+                </mat-chip-list>
             </div>
-            <button fxFlex="nogrow" [disabled]="path.invalid" mat-raised-button
-                    (click)="checkConfig()">Inspect Configuration
-            </button>
-            <div></div>
+            <mat-checkbox [formControl]="selectAll" (change)="onSelectAllChange()">Enable All</mat-checkbox>
+            <mat-checkbox [formControl]="devMode"  (change)="onDevModeChange()">
+                <div class="checkbox-label">
+                    <div>Running from source</div>
+                    <div class="control-hint muted">Check this if you are inspecting Kylo configuration checked out from GitHub</div>
+                </div>
+            </mat-checkbox>
+            <div class="actions" fxlayout="row" fxLayoutAlign="space-between center">
+                <button fxFlex="nogrow" [disabled]="path.invalid"
+                        mat-raised-button color="primary"
+                        (click)="checkConfig()">Inspect Configuration
+                </button>
+                <button fxFlex="nogrow" title="Download Report"
+                        mat-mini-fab color="primary"
+                        (click)="downloadReport()">
+                    <i class="fa fa-download"></i>
+                </button>
+            </div>
         </div>
 
+        <!--
+        todo Inspections should link to Read-the-docs
+        todo Inspections which users have difficulties with on Google Groups
+        -->
 
         <mat-card class="inspection" *ngFor="let check of checks; let i = index"
                   [class.disabled]="check.enabled.value === false"
@@ -45,7 +65,7 @@
                 <div fxLayout="row" fxLayoutAlign="center center">
                     <div class="inspection-enabled-check" fxLayout="column" fxLayoutAlign="start center">
                         <mat-checkbox class="inspection-enabled-check-checkbox muted" name="check_{{ i }}" [formControl]="check.enabled"></mat-checkbox>
-                        <div class="devmode-hint muted">Enabled</div>
+                        <div class="control-hint muted">Enabled</div>
                     </div>
                     <div fxFlex fxLayout="column">
                         <span class="inspection-header">{{check.name}}</span>

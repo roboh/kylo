@@ -10,12 +10,35 @@ Main page styles
     font-size: 15px;
 }
 
-.devmode-hint {
+.release-notes-link {
+    margin-left: 10px;
+}
+
+.control-hint {
     font-size: 0.8em;
 }
 
 .inspection {
     margin-bottom: 10px;
+
+    .fa {
+        color: gray;
+        margin-right: 15px;
+        margin-top: -5px;
+    }
+
+    .fa-warning {
+        color: tomato;
+    }
+
+    .fa-check {
+        color: seagreen;
+    }
+
+    .fa-larger {
+        font-size: 3em;
+    }
+
 }
 
 .inspection-header {
@@ -32,6 +55,14 @@ Main page styles
     margin-right: 15px;
 }
 
+.inspection-enabled-check > * {
+    padding-bottom: 4px;
+}
+
+.actions {
+    width: 100%;
+}
+
 .inspection-enabled-check-checkbox {
 }
 
@@ -40,7 +71,14 @@ Main page styles
 }
 
 .inspection-status-error {
+    padding: 10px;
+    background: #ff634726;
+    margin-right: 40px;
+}
 
+.checkbox-label {
+    line-height: 17px;
+    padding-top: 5px;
 }
 
 .muted {
@@ -65,20 +103,3 @@ Main page styles
     min-width: 500px;
 }
 
-.fa {
-    color: gray;
-    margin-right: 15px;
-    margin-top: -5px;
-}
-
-.fa-warning {
-    color: tomato;
-}
-
-.fa-check {
-    color: seagreen;
-}
-
-.fa-larger {
-    font-size: 3em;
-}
