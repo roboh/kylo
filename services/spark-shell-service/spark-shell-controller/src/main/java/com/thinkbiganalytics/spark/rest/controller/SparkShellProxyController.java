@@ -26,6 +26,7 @@ import com.thinkbiganalytics.metadata.api.MetadataAccess;
 import com.thinkbiganalytics.metadata.api.datasource.DatasourceProvider;
 import com.thinkbiganalytics.rest.model.RestResponseStatus;
 import com.thinkbiganalytics.security.AccessController;
+import com.thinkbiganalytics.spark.rest.model.DataSources;
 import com.thinkbiganalytics.spark.rest.model.Datasource;
 import com.thinkbiganalytics.spark.rest.model.JdbcDatasource;
 import com.thinkbiganalytics.spark.rest.model.RegistrationRequest;
@@ -83,16 +84,25 @@ import io.swagger.annotations.Tag;
  */
 @Api(tags = "Feed Manager - Data Wrangler")
 @Component
-@Path("/v1/spark/shell")
+@Path(SparkShellProxyController.BASE)
+@SuppressWarnings("RSReferenceInspection")
 @SwaggerDefinition(tags = @Tag(name = "Feed Manager - Data Wrangler", description = "data transformations"))
 public class SparkShellProxyController {
 
     private static final Logger log = LoggerFactory.getLogger(SparkShellProxyController.class);
 
+    public static final String BASE = "/v1/spark/shell";
+    public static final String TRANSFORM = "/transform";
+    public static final String TRANSFORM_DOWNLOAD = "/transform/{transform}/save/{save}/zip";
+    public static final String TRANSFORM_SAVE = "/transform/{transform}/save";
+    public static final String TRANSFORM_SAVE_RESULT = "/transform/{transform}/save/{save}";
+
     /**
      * Pattern for matching exceptions in messages.
      */
-    private static final Pattern EXCEPTION = Pattern.compile("^(\\s*[a-zA-Z0-9.]+:(?=\\s*[a-zA-Z0-9.]+:))*\\s*[a-zA-Z0-9.]+?(?=[a-zA-Z0-9]+:)");
+    private static final Pattern EXCEPTION = Pattern.compile(
+        "^(\\s*[a-zA-Z0-9_$.]+:(?=\\s*[a-zA-Z0-9_$.]+:))*"               // matches all but last "package.Class: package.Class: package.Class:"
+        + "\\s*([a-zA-Z_$][a-zA-Z0-9_$.]+($|\\.))?(?=[a-zA-Z0-9_]+:)");  // matches last "package.Class:"
 
     /**
      * Resources for error messages
@@ -165,7 +175,7 @@ public class SparkShellProxyController {
      * @return the download response
      */
     @GET
-    @Path("/transform/{transform}/save/{save}/zip")
+    @Path(TRANSFORM_DOWNLOAD)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @ApiOperation("Downloads the saved results in a ZIP file")
     @ApiResponses({
@@ -186,7 +196,7 @@ public class SparkShellProxyController {
     @Path("data-sources")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Finds Spark data sources")
-    @ApiResponse(code = 200, message = "List of Spark data sources.", response = String.class, responseContainer = "List")
+    @ApiResponse(code = 200, message = "List of Spark data sources.", response = DataSources.class)
     public Response getDataSources() {
         final SparkShellProcess process = getSparkShellProcess();
         return Response.ok(restClient.getDataSources(process)).build();
@@ -266,7 +276,7 @@ public class SparkShellProxyController {
      * @return the save status
      */
     @GET
-    @Path("/transform/{transform}/save/{save}")
+    @Path(TRANSFORM_SAVE_RESULT)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Fetches the status of a save")
     @ApiResponses({
@@ -343,7 +353,7 @@ public class SparkShellProxyController {
      * Saves the results of a Spark script.
      */
     @POST
-    @Path("/transform/{transform}/save")
+    @Path(TRANSFORM_SAVE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Saves the results of a transformation.")
@@ -426,7 +436,7 @@ public class SparkShellProxyController {
      * @return the transformation status
      */
     @POST
-    @Path("/transform")
+    @Path(TRANSFORM)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Queries a Hive table and applies a series of transformations on the rows.")
@@ -436,6 +446,7 @@ public class SparkShellProxyController {
                       @ApiResponse(code = 500, message = "There was a problem processing the data.", response = RestResponseStatus.class)
                   })
     @Nonnull
+    @SuppressWarnings("squid:S1845")
     public Response transform(@ApiParam(value = "The request indicates the transformations to apply to the source table and how the user wishes the results to be displayed. Exactly one parent or"
                                                 + " source must be specified.", required = true)
                               @Nullable final TransformRequest request) {

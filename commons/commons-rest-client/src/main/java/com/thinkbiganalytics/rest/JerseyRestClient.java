@@ -254,14 +254,14 @@ public class JerseyRestClient {
 
 
     /**
-     * Allows derived classes to make modifactions to the clientConfig before it is used to construct the client.
+     * Allows derived classes to make modifications to the clientConfig before it is used to construct the client.
      *
      * @param clientConfig the Rest Client Configuration
+     * NOTE:  this method should never be final.  Some plugin classes may extend this method.
      */
-    private final void extendClientConfig(ClientConfig clientConfig) {
+    protected void extendClientConfig(ClientConfig clientConfig) {
 
     }
-
 
     /**
      * Flag to detect if this client is configured correctly.
@@ -538,6 +538,14 @@ public class JerseyRestClient {
             }
         }
         return obj;
+    }
+
+    /**
+     * Makes a GET request and doesn't handle errors on purpose.
+     */
+    public <T> T get(String path, Class<T> clazz) {
+        WebTarget target = getTargetFromPath(path);
+        return target.request(MediaType.APPLICATION_JSON_TYPE).accept(MediaType.APPLICATION_JSON_TYPE, MediaType.APPLICATION_XML_TYPE).get(clazz);
     }
 
 

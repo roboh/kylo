@@ -1,6 +1,7 @@
 import * as angular from "angular";
 import * as _ from "underscore";
 import {DomainType} from "./DomainTypesService";
+import {Common} from "../../common/CommonTypes";
 
 function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToast: angular.material.IToastService, $mdDialog: angular.material.IDialogService, RestUrlService: any,
                      VisualQueryService: any, FeedCreationErrorService: any, FeedPropertyService: any, AccessControlService: any, EntityAccessControlService: any, StateService: any) {
@@ -32,6 +33,17 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
         //return str.replace(/([A-Z])/g, "_$1").replace(/^_/,'').toLowerCase();
     }
 
+    /**
+     * A cache of the controllerservice Id to its display name.
+     * This is used when a user views a feed that has a controller service as a property so it shows the Name (i.e. MySQL)
+     * and not the UUID of the service.
+     *
+     * @type {{}}
+     */
+    let controllerServiceDisplayCache :Common.Map<string> = {};
+
+    let controllerServiceDisplayCachePromiseTracker: any = {};
+
     const data = {
 
         /**
@@ -42,6 +54,14 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
          * The Feed Model that is being Edited when a user clicks on a Feed Details
          */
         editFeedModel: {},
+        /**
+         * Feed model for comparison with editFeedModel in Versions tab
+         */
+        versionFeedModel: {},
+        /**
+         * Difference between editFeedModel and versionFeedModel
+         */
+        versionFeedModelDiff: [],
         /**
          * The initial CRON expression used when a user selects Cron for the Schedule option
          */
@@ -159,7 +179,7 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
                 tableOption: {},
                 cloned: false,
                 usedByFeeds: [],
-                allowIndexing: 'Y',
+                allowIndexing: true,
                 historyReindexingStatus: 'NEVER_RUN',
                 view: {
                     generalInfo: {disabled: false},
@@ -192,8 +212,13 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
             data.createFeedModel.feedName += "_copy";
             data.createFeedModel.systemFeedName += "_copy";
             data.createFeedModel.owner = undefined;
+            _.each(data.createFeedModel.table.tableSchema.fields, function(field: any) {
+                field._id = _.uniqueId();
+            });
+            _.each(data.createFeedModel.table.partitions, function(partition: any) {
+                partition._id = _.uniqueId();
+            });
             return data.createFeedModel;
-
         },
         /**
          * Called when starting a new feed.
@@ -494,6 +519,10 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
             //prepare access control changes if any
             EntityAccessControlService.updateRoleMembershipsForSave(model.roleMemberships);
 
+            if(model.cloned){
+                model.state = null;
+            }
+
             if (model.table && model.table.fieldPolicies && model.table.tableSchema && model.table.tableSchema.fields) {
                 // Set feed
 
@@ -656,6 +685,14 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
 
         },
         /**
+         * Call out to the server to get info on whether feed history data reindexing is configured in Kylo
+         * @returns {HttpPromise}
+         */
+        isKyloConfiguredForFeedHistoryDataReindexing: function() {
+            return $http.get(RestUrlService.FEED_HISTORY_CONFIGURED);
+        }
+        ,
+        /**
          * When creating a Feed find the First Column/Field that matches the given name
          * @param name
          * @returns {*|{}}
@@ -723,7 +760,7 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
          */
         getUserPropertyList: function (model: any): {key: string, value: string}[] {
             var userPropertyList: any[] = [];
-            angular.forEach(model.userProperties, function (value, key) {
+            angular.forEach(model.userProperties, function (value, key: string) {
                 if (!key.startsWith("jcr:")) {
                     userPropertyList.push({key: key, value: value});
                 }
@@ -755,6 +792,42 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
                 .then(function (response) {
                     return response.data;
                 });
+        },
+        setControllerServicePropertyDisplayName:function(property: any){
+
+            let setDisplayValue = (property :any) : boolean => {
+                let cacheEntry:string = controllerServiceDisplayCache[property.value];
+                if(cacheEntry != null) {
+                    property.displayValue =cacheEntry;
+                    return true;
+                }
+                return false;
+            }
+
+            if(angular.isObject(property.propertyDescriptor) && angular.isString(property.propertyDescriptor.identifiesControllerService)) {
+                if (!setDisplayValue(property)) {
+
+                    let entry: any = controllerServiceDisplayCachePromiseTracker[property.propertyDescriptor.identifiesControllerService];
+                    if (entry == undefined) {
+                        let promise = data.getAvailableControllerServices(property.propertyDescriptor.identifiesControllerService);
+                        entry = {request: promise, waitingProperties: []};
+                        entry.waitingProperties.push(property);
+                        controllerServiceDisplayCachePromiseTracker[property.propertyDescriptor.identifiesControllerService] = entry;
+                        promise.then((services: any) => {
+                            _.each(services, (service: any) => {
+                                controllerServiceDisplayCache[service.id] = service.name;
+                            });
+                            _.each(entry.waitingProperties, (property) => {
+                                setDisplayValue(property);
+                            });
+                            delete controllerServiceDisplayCachePromiseTracker[property.propertyDescriptor.identifiesControllerService];
+                        })
+                    }
+                    else {
+                        entry.waitingProperties.push(property);
+                    }
+                }
+            }
         },
         /**
          * Finds the allowed controller services for the specified property and sets the allowable values.
@@ -800,6 +873,39 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
                     return response.data;
                 });
         },
+        
+        
+        getFeedVersions: function (feedId: string) {
+            var successFn = function (response: any) {
+                return response.data;
+            }
+            var errorFn = function (err: any) {
+                console.log('ERROR ', err)
+            }
+            return $http.get(RestUrlService.FEED_VERSIONS_URL(feedId)).then(successFn, errorFn);
+        },
+        
+        getFeedVersion: function (feedId: string, versionId: string) {
+            var successFn = function (response: any) {
+                return response.data;
+            }
+            var errorFn = function (err: any) {
+                console.log('ERROR ', err)
+            }
+            return $http.get(RestUrlService.FEED_VERSION_ID_URL(feedId, versionId)).then(successFn, errorFn);
+        },
+        
+        diffFeedVersions: function (feedId: string, versionId1: string, versionId2: string) {
+            var successFn = function (response: any) {
+                return response.data;
+
+            }
+            var errorFn = function (err: any) {
+                console.log('ERROR ', err)
+            }
+            return $http.get(RestUrlService.FEED_VERSIONS_DIFF_URL(feedId, versionId1, versionId2)).then(successFn, errorFn);
+        },
+
         /**
          * check if the user has access on an entity
          * @param permissionsToCheck an Array or a single string of a permission/action to check against this entity and current user
@@ -840,11 +946,52 @@ function FeedService($http: angular.IHttpService, $q: angular.IQService, $mdToas
                 policy.standardization = angular.copy(domainType.fieldPolicy.standardization);
                 policy.validation = angular.copy(domainType.fieldPolicy.validation);
             }
-        }
-    } as any;
-    data.init();
-    return data;
+        },
+        /**
+         * Returns operation of the difference at given path for versioned feed
+         * @param path current diff model
+         * @returns {string} operation type, e.g. add, remove, update, no-change
+         */
+        diffOperation: function (path: any) {
+            return this.versionFeedModelDiff && this.versionFeedModelDiff[path] ? this.versionFeedModelDiff[path].op : 'no-change';
+        },
 
+        diffCollectionOperation: function (path: any) {
+            const self = this;
+            if (this.versionFeedModelDiff) {
+                if (this.versionFeedModelDiff[path]) {
+                    return this.versionFeedModelDiff[path].op;
+                } else {
+                    const patch = {op: 'no-change'};
+                    _.each(_.values(this.versionFeedModelDiff), function(p) {
+                        if (p.path.startsWith(path + "/")) {
+                            patch.op = self.joinVersionOperations(patch.op, p.op);
+                        }
+                    });
+                    return patch.op;
+                }
+            }
+            return 'no-change';
+        },
+
+        joinVersionOperations: function(op1: any, op2: any) {
+            const opLevels = {'no-change': 0, 'add': 1, 'remove': 1, 'replace': 2};
+            if (opLevels[op1] === opLevels[op2] && op1 !== 'no-change') {
+                return 'replace';
+            }
+            return opLevels[op1] > opLevels[op2] ? op1 : op2;
+        },
+
+        resetVersionFeedModel: function() {
+            this.versionFeedModel = {};
+            this.versionFeedModelDiff = {};
+        }
+
+    } as any;
+    
+    data.init();
+    
+    return data;
 }
 
 /**

@@ -9,7 +9,7 @@ define(["require", "exports", "angular", "jquery", "underscore", "../services/wr
     /**
      * Minimum width of a column including padding.
      */
-    var COLUMN_WIDTH_MIN = 150;
+    var COLUMN_WIDTH_MIN = 100;
     /**
      * Width of the domain type icon.
      */
@@ -246,6 +246,10 @@ define(["require", "exports", "angular", "jquery", "underscore", "../services/wr
          */
         VisualQueryTable.prototype.onRowsChange = function () {
             var self = this;
+            // Add index column
+            if (this.rows && this.rows.length > 0 && this.rows[0].length === this.columns.length) {
+                this.rows.forEach(function (row, index) { return row.push(index); });
+            }
             // Filter rows
             this.dataService.rows_ = _.filter(this.rows, function (row) {
                 return _.every(self.dataService.columns_, function (column, index) {

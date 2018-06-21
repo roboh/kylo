@@ -5,7 +5,7 @@
       <div layout="row" layout-align="center start">
         <div class="card-title">Data Source Details</div>
         <span flex></span>
-        <ng-md-icon icon="storage" ng-style="{'fill':vm.model.iconColor}" style="padding-right:16px;" size="30"></ng-md-icon>
+        <ng-md-icon icon="{{vm.model.icon}}" ng-style="{'fill':vm.model.iconColor}" style="padding-right:16px;" size="30"></ng-md-icon>
       </div>
     </header-section>
     <body-section>
@@ -85,13 +85,22 @@
 
             <md-input-container class="md-block">
               <label>Database User</label>
-              <input ng-model="vm.editModel.databaseUser"/>
+              <input autocomplete="new-password" ng-model="vm.editModel.databaseUser"/>
             </md-input-container>
 
             <md-input-container class="md-block">
               <label>Password</label>
-              <input type="password" ng-model="vm.editModel.password" ng-change="vm.onPasswordChange()"/>
+              <input type="password" autocomplete="new-password" ng-model="vm.editModel.password" ng-change="vm.onPasswordChange()"/>
             </md-input-container>
+
+            <md-input-container class="md-block" style="padding-top: 0">
+              <div layout="row" layout-align="start center">
+                <md-button ng-disabled="!vm.datasourceForm.$valid" class="md-primary" ng-click="vm.testConnection()" style="margin-left: 0">Test Connection</md-button>
+                <div ng-if="vm.testConnectionResult && !vm.testConnectionResult.status" style="color: rgb(221,44,0);">{{vm.testConnectionResult.msg}}</div>
+                <ng-md-icon ng-if="vm.testConnectionResult.status" icon="check" size="30" style="margin: inherit; margin-top: -10px; fill: green"></ng-md-icon>
+              </div>
+            </md-input-container>
+
             <div layout="column">
               <div layout="row" layout-align="start start" class="layout-padding-top-bottom">
                 <span class="md-input-label" style="font-size: 11px;" flex="25">Icon </span>

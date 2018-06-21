@@ -24,6 +24,15 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
             }).replace(/^_/, "");
             //return str.replace(/([A-Z])/g, "_$1").replace(/^_/,'').toLowerCase();
         }
+        /**
+         * A cache of the controllerservice Id to its display name.
+         * This is used when a user views a feed that has a controller service as a property so it shows the Name (i.e. MySQL)
+         * and not the UUID of the service.
+         *
+         * @type {{}}
+         */
+        var controllerServiceDisplayCache = {};
+        var controllerServiceDisplayCachePromiseTracker = {};
         var data = {
             /**
              * The Feed model in the Create Feed Stepper
@@ -33,6 +42,14 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
              * The Feed Model that is being Edited when a user clicks on a Feed Details
              */
             editFeedModel: {},
+            /**
+             * Feed model for comparison with editFeedModel in Versions tab
+             */
+            versionFeedModel: {},
+            /**
+             * Difference between editFeedModel and versionFeedModel
+             */
+            versionFeedModelDiff: [],
             /**
              * The initial CRON expression used when a user selects Cron for the Schedule option
              */
@@ -146,7 +163,7 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                     tableOption: {},
                     cloned: false,
                     usedByFeeds: [],
-                    allowIndexing: 'Y',
+                    allowIndexing: true,
                     historyReindexingStatus: 'NEVER_RUN',
                     view: {
                         generalInfo: { disabled: false },
@@ -179,6 +196,12 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                 data.createFeedModel.feedName += "_copy";
                 data.createFeedModel.systemFeedName += "_copy";
                 data.createFeedModel.owner = undefined;
+                _.each(data.createFeedModel.table.tableSchema.fields, function (field) {
+                    field._id = _.uniqueId();
+                });
+                _.each(data.createFeedModel.table.partitions, function (partition) {
+                    partition._id = _.uniqueId();
+                });
                 return data.createFeedModel;
             },
             /**
@@ -457,6 +480,9 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                 model.properties = properties;
                 //prepare access control changes if any
                 EntityAccessControlService.updateRoleMembershipsForSave(model.roleMemberships);
+                if (model.cloned) {
+                    model.state = null;
+                }
                 if (model.table && model.table.fieldPolicies && model.table.tableSchema && model.table.tableSchema.fields) {
                     // Set feed
                     var newFields = [];
@@ -604,6 +630,13 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                 return $http.get(RestUrlService.GET_SYSTEM_NAME, { params: { name: feedName } });
             },
             /**
+             * Call out to the server to get info on whether feed history data reindexing is configured in Kylo
+             * @returns {HttpPromise}
+             */
+            isKyloConfiguredForFeedHistoryDataReindexing: function () {
+                return $http.get(RestUrlService.FEED_HISTORY_CONFIGURED);
+            },
+            /**
              * When creating a Feed find the First Column/Field that matches the given name
              * @param name
              * @returns {*|{}}
@@ -695,6 +728,39 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                     return response.data;
                 });
             },
+            setControllerServicePropertyDisplayName: function (property) {
+                var setDisplayValue = function (property) {
+                    var cacheEntry = controllerServiceDisplayCache[property.value];
+                    if (cacheEntry != null) {
+                        property.displayValue = cacheEntry;
+                        return true;
+                    }
+                    return false;
+                };
+                if (angular.isObject(property.propertyDescriptor) && angular.isString(property.propertyDescriptor.identifiesControllerService)) {
+                    if (!setDisplayValue(property)) {
+                        var entry_1 = controllerServiceDisplayCachePromiseTracker[property.propertyDescriptor.identifiesControllerService];
+                        if (entry_1 == undefined) {
+                            var promise = data.getAvailableControllerServices(property.propertyDescriptor.identifiesControllerService);
+                            entry_1 = { request: promise, waitingProperties: [] };
+                            entry_1.waitingProperties.push(property);
+                            controllerServiceDisplayCachePromiseTracker[property.propertyDescriptor.identifiesControllerService] = entry_1;
+                            promise.then(function (services) {
+                                _.each(services, function (service) {
+                                    controllerServiceDisplayCache[service.id] = service.name;
+                                });
+                                _.each(entry_1.waitingProperties, function (property) {
+                                    setDisplayValue(property);
+                                });
+                                delete controllerServiceDisplayCachePromiseTracker[property.propertyDescriptor.identifiesControllerService];
+                            });
+                        }
+                        else {
+                            entry_1.waitingProperties.push(property);
+                        }
+                    }
+                }
+            },
             /**
              * Finds the allowed controller services for the specified property and sets the allowable values.
              *
@@ -736,6 +802,33 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                     return response.data;
                 });
             },
+            getFeedVersions: function (feedId) {
+                var successFn = function (response) {
+                    return response.data;
+                };
+                var errorFn = function (err) {
+                    console.log('ERROR ', err);
+                };
+                return $http.get(RestUrlService.FEED_VERSIONS_URL(feedId)).then(successFn, errorFn);
+            },
+            getFeedVersion: function (feedId, versionId) {
+                var successFn = function (response) {
+                    return response.data;
+                };
+                var errorFn = function (err) {
+                    console.log('ERROR ', err);
+                };
+                return $http.get(RestUrlService.FEED_VERSION_ID_URL(feedId, versionId)).then(successFn, errorFn);
+            },
+            diffFeedVersions: function (feedId, versionId1, versionId2) {
+                var successFn = function (response) {
+                    return response.data;
+                };
+                var errorFn = function (err) {
+                    console.log('ERROR ', err);
+                };
+                return $http.get(RestUrlService.FEED_VERSIONS_DIFF_URL(feedId, versionId1, versionId2)).then(successFn, errorFn);
+            },
             /**
              * check if the user has access on an entity
              * @param permissionsToCheck an Array or a single string of a permission/action to check against this entity and current user
@@ -773,6 +866,43 @@ define(["require", "exports", "angular", "underscore"], function (require, expor
                     policy.standardization = angular.copy(domainType.fieldPolicy.standardization);
                     policy.validation = angular.copy(domainType.fieldPolicy.validation);
                 }
+            },
+            /**
+             * Returns operation of the difference at given path for versioned feed
+             * @param path current diff model
+             * @returns {string} operation type, e.g. add, remove, update, no-change
+             */
+            diffOperation: function (path) {
+                return this.versionFeedModelDiff && this.versionFeedModelDiff[path] ? this.versionFeedModelDiff[path].op : 'no-change';
+            },
+            diffCollectionOperation: function (path) {
+                var self = this;
+                if (this.versionFeedModelDiff) {
+                    if (this.versionFeedModelDiff[path]) {
+                        return this.versionFeedModelDiff[path].op;
+                    }
+                    else {
+                        var patch_1 = { op: 'no-change' };
+                        _.each(_.values(this.versionFeedModelDiff), function (p) {
+                            if (p.path.startsWith(path + "/")) {
+                                patch_1.op = self.joinVersionOperations(patch_1.op, p.op);
+                            }
+                        });
+                        return patch_1.op;
+                    }
+                }
+                return 'no-change';
+            },
+            joinVersionOperations: function (op1, op2) {
+                var opLevels = { 'no-change': 0, 'add': 1, 'remove': 1, 'replace': 2 };
+                if (opLevels[op1] === opLevels[op2] && op1 !== 'no-change') {
+                    return 'replace';
+                }
+                return opLevels[op1] > opLevels[op2] ? op1 : op2;
+            },
+            resetVersionFeedModel: function () {
+                this.versionFeedModel = {};
+                this.versionFeedModelDiff = {};
             }
         };
         data.init();

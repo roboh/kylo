@@ -26,10 +26,13 @@ import com.thinkbiganalytics.feedmgr.rest.model.RegisteredTemplate;
 import com.thinkbiganalytics.nifi.rest.client.LegacyNifiRestClient;
 import com.thinkbiganalytics.nifi.rest.client.NifiClientRuntimeException;
 import com.thinkbiganalytics.nifi.rest.client.NifiComponentNotFoundException;
+import com.thinkbiganalytics.nifi.rest.model.NiFiRemoteProcessGroup;
 import com.thinkbiganalytics.nifi.rest.model.NifiProperty;
 import com.thinkbiganalytics.nifi.rest.support.NifiPropertyUtil;
+import com.thinkbiganalytics.nifi.rest.support.NifiRemoteProcessGroupUtil;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.nifi.web.api.dto.RemoteProcessGroupDTO;
 import org.apache.nifi.web.api.dto.TemplateDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -211,9 +214,21 @@ public class NiFiTemplateCache {
                                                                     NifiPropertyUtil.PROPERTY_MATCH_AND_UPDATE_MODE.UPDATE_ALL_PROPERTIES);
             }
             cachedProperties.setProperties(properties);
+
+            List<NiFiRemoteProcessGroup> remoteProcessGroups = NifiRemoteProcessGroupUtil.niFiRemoteProcessGroup(templateDTO);
+            cachedProperties.setRemoteProcessGroups(remoteProcessGroups);
             cachedProperties.setLastUpdated(templateDTO.getTimestamp().getTime());
         }
         return cachedProperties.getProperties();
+
+    }
+
+
+    public List<NiFiRemoteProcessGroup> getRemoteProcessGroups(TemplateDTO templateDTO) {
+        getTemplateProperties(templateDTO,true,null);
+        String cacheKey = cacheKey(templateDTO, true);
+        TemplatePropertiesCache cachedProperties = templatePropertiesCache.getIfPresent(cacheKey);
+        return cachedProperties.getRemoteProcessGroups();
 
     }
 
@@ -244,6 +259,7 @@ public class NiFiTemplateCache {
         private boolean includePropertyDescriptors;
         private Long lastUpdated;
         private List<NifiProperty> properties;
+        private List<NiFiRemoteProcessGroup> remoteProcessGroups;
 
         public TemplatePropertiesCache(String templateId, boolean includePropertyDescriptors, Long lastUpdated) {
             this.templateId = templateId;
@@ -273,6 +289,14 @@ public class NiFiTemplateCache {
 
         public void setProperties(List<NifiProperty> properties) {
             this.properties = properties;
+        }
+
+        public List<NiFiRemoteProcessGroup> getRemoteProcessGroups() {
+            return remoteProcessGroups;
+        }
+
+        public void setRemoteProcessGroups(List<NiFiRemoteProcessGroup> remoteProcessGroups) {
+            this.remoteProcessGroups = remoteProcessGroups;
         }
     }
 
