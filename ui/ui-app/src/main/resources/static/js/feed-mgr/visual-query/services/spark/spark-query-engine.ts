@@ -33,6 +33,7 @@ import {SparkColumnDelegate} from "./spark-column";
 import {SparkConstants} from "./spark-constants";
 import {SparkQueryParser} from "./spark-query-parser";
 import {SparkScriptBuilder} from "./spark-script-builder";
+import {PageSpec} from "../../wrangler/query-engine";
 
 /**
  * Generates a Scala script to be executed by Kylo Spark Shell.
@@ -128,12 +129,12 @@ export class SparkQueryEngine extends QueryEngine<string> {
      * @param {string} label
      * @return {string}
      */
-    getValidHiveColumnName(label: string){
-        return label.replace(this.VALID_NAME_PATTERN,'')
+    getValidHiveColumnName(label: string) {
+        return label.replace(this.VALID_NAME_PATTERN, '')
     }
 
     /**
-     * Gets the schema fields for the the current transformation.
+     * Gets the schema fields  for the the current transformation.
      *
      * @returns the schema fields or {@code null} if the transformation has not been applied
      */
@@ -196,8 +197,20 @@ export class SparkQueryEngine extends QueryEngine<string> {
         let sparkScript = "import org.apache.spark.sql._\n";
 
         if (start === 0) {
-            sparkScript += this.source_;
-            sparkScript += SparkConstants.DATA_FRAME_VARIABLE + " = " + SparkConstants.DATA_FRAME_VARIABLE;
+
+
+            if (this.hasSampleFile()) {
+                //we are working with a file.. add the spark code to use it
+                //extract options out from a variable to do the parsing
+                sparkScript += this.sampleFile.script;
+                sparkScript += "\n";
+                sparkScript += SparkConstants.DATA_FRAME_VARIABLE + " = " + SparkConstants.DATA_FRAME_VARIABLE;
+            }else {
+                sparkScript += this.source_;
+                sparkScript += SparkConstants.DATA_FRAME_VARIABLE + " = " + SparkConstants.DATA_FRAME_VARIABLE;
+            }
+            //limit
+
             if (sample && this.limitBeforeSample_ && this.limit_ > 0) {
                 sparkScript += ".limit(" + this.limit_ + ")";
             }
@@ -354,14 +367,22 @@ export class SparkQueryEngine extends QueryEngine<string> {
      *
      * @return an observable for the response progress
      */
-    transform(): Observable<any> {
+    transform(pageSpec ?: PageSpec, doValidate: boolean = true, doProfile: boolean = false): Observable<any> {
         // Build the request body
+
+        if (!pageSpec) {
+            pageSpec = PageSpec.defaultPage();
+        }
+
         let body = {
-            "policies": this.getState().fieldPolicies
+            "policies": this.getState().fieldPolicies,
+            "pageSpec": pageSpec,
+            "doProfile": doProfile,
+            "doValidate": doValidate
         };
         let index = this.states_.length - 1;
 
-        if (index > 0) {
+        if (index > -1) {
             // Find last cached state
             let last = index - 1;
             while (last >= 0 && this.states_[last].table === null) {
@@ -369,7 +390,13 @@ export class SparkQueryEngine extends QueryEngine<string> {
             }
 
             // Add script to body
-            body["script"] = this.getScript(last + 1, index);
+            if (!this.hasStateChanged()) {
+                body["script"] = "import org.apache.spark.sql._\nvar df = parent\ndf";
+                last = index;
+            } else {
+                body["script"] = this.getScript(last + 1, index);
+            }
+
             if (last >= 0) {
                 body["parent"] = {
                     table: this.states_[last].table,
@@ -384,6 +411,10 @@ export class SparkQueryEngine extends QueryEngine<string> {
         if (this.datasources_ !== null) {
             body["datasources"] = this.datasources_.filter(datasource => datasource.id !== SparkConstants.HIVE_DATASOURCE);
         }
+        //add in the datasets
+        if(this.datasets !== null){
+            body["catalogDatasets"] = this.datasets;
+        }
 
         // Create the response handlers
         let self = this;
@@ -391,14 +422,18 @@ export class SparkQueryEngine extends QueryEngine<string> {
 
         let successCallback = function (response: angular.IHttpResponse<TransformResponse>) {
             let state = self.states_[index];
-
+            self.resetStateChange();
             // Check status
             if (response.data.status === "PENDING") {
+
+
                 if (state.columns === null && response.data.results && response.data.results.columns) {
-                    state.columns = response.data.results.columns;
-                    state.rows = [];
-                    state.table = response.data.table;
-                    self.updateFieldPolicies(state);
+
+                //Unnecessary and causes table refresh problems
+                    // state.columns = response.data.results.columns;
+                    // state.rows = [];
+                    // state.table = response.data.table;
+                    // self.updateFieldPolicies(state);
                 }
 
                 deferred.next(response.data.progress);
@@ -410,7 +445,7 @@ export class SparkQueryEngine extends QueryEngine<string> {
                         headers: {"Content-Type": "application/json"},
                         responseType: "json"
                     }).then(successCallback, errorCallback);
-                }, 1000, false);
+                }, 500, false);
                 return;
             }
             if (response.data.status !== "SUCCESS") {
@@ -427,20 +462,22 @@ export class SparkQueryEngine extends QueryEngine<string> {
             });
 
             if (angular.isDefined(invalid)) {
-                state.columns = [];
                 state.rows = [];
+                state.columns = [];
                 deferred.error("Column name '" + invalid.hiveColumnLabel + "' is not supported. Please choose a different name.");
             } else if (angular.isDefined(reserved)) {
-                state.columns = [];
                 state.rows = [];
+                state.columns = [];
                 deferred.error("Column name '" + reserved.hiveColumnLabel + "' is reserved. Please choose a different name.");
             } else {
                 // Update state
-                state.columns = response.data.results.columns;
                 state.profile = response.data.profile;
                 state.rows = response.data.results.rows;
                 state.table = response.data.table;
                 state.validationResults = response.data.results.validationResults;
+                state.actualCols = response.data.actualCols;
+                state.actualRows = response.data.actualRows;
+                state.columns = response.data.results.columns;
                 self.updateFieldPolicies(state);
 
                 // Indicate observable is complete
@@ -452,6 +489,7 @@ export class SparkQueryEngine extends QueryEngine<string> {
             let state = self.states_[index];
             state.columns = [];
             state.rows = [];
+            self.resetStateChange();
 
             // Respond with error message
             let message;
@@ -498,27 +536,27 @@ export class SparkQueryEngine extends QueryEngine<string> {
         var self = this;
         if (state.fieldPolicies != null && state.fieldPolicies.length > 0) {
             const policyMap = {};
-            state.fieldPolicies.forEach(policy => {
-                policyMap[policy.name] = policy;
-            });
+                state.fieldPolicies.forEach(policy => {
+                    policyMap[policy.name] = policy;
+                });
 
-            state.fieldPolicies = state.columns.map(column => {
-                var name = angular.isDefined(column.displayName) ? self.getValidHiveColumnName(column.displayName) : column.hiveColumnLabel;
-                if (policyMap[name]) {
-                    return policyMap[name];
-                } else {
-                    return {
-                        name:name,
-                        fieldName:name,
-                        feedFieldName:name,
-                        domainTypeId: null,
-                        partition: null,
-                        profile: true,
-                        standardization: null,
-                        validation: null
-                    };
-                }
-            });
+                state.fieldPolicies = state.columns.map(column => {
+                    var name = angular.isDefined(column.displayName) ? self.getValidHiveColumnName(column.displayName) : column.hiveColumnLabel;
+                    if (policyMap[name]) {
+                        return policyMap[name];
+                    } else {
+                        return {
+                            name: name,
+                            fieldName: name,
+                            feedFieldName: name,
+                            domainTypeId: null,
+                            partition: null,
+                            profile: true,
+                            standardization: null,
+                            validation: null
+                        };
+                    }
+                });
         }
     }
 }

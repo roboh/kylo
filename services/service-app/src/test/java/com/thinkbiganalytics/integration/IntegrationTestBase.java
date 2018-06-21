@@ -31,6 +31,7 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import com.jayway.restassured.RestAssured;
 import com.jayway.restassured.internal.mapping.Jackson2Mapper;
 import com.jayway.restassured.mapper.factory.Jackson2ObjectMapperFactory;
+import com.jayway.restassured.parsing.Parser;
 import com.jayway.restassured.path.json.JsonPath;
 import com.jayway.restassured.response.Response;
 import com.jayway.restassured.specification.RequestSpecification;
@@ -45,11 +46,13 @@ import com.thinkbiganalytics.feedmgr.rest.ImportComponent;
 import com.thinkbiganalytics.feedmgr.rest.controller.AdminController;
 import com.thinkbiganalytics.feedmgr.rest.controller.AdminControllerV2;
 import com.thinkbiganalytics.feedmgr.rest.controller.DatasourceController;
+import com.thinkbiganalytics.feedmgr.rest.controller.DomainTypesController;
 import com.thinkbiganalytics.feedmgr.rest.controller.FeedCategoryRestController;
 import com.thinkbiganalytics.feedmgr.rest.controller.FeedRestController;
 import com.thinkbiganalytics.feedmgr.rest.controller.NifiIntegrationRestController;
 import com.thinkbiganalytics.feedmgr.rest.controller.ServiceLevelAgreementRestController;
 import com.thinkbiganalytics.feedmgr.rest.controller.TemplatesRestController;
+import com.thinkbiganalytics.feedmgr.rest.model.DomainType;
 import com.thinkbiganalytics.feedmgr.rest.model.EntityVersionDifference;
 import com.thinkbiganalytics.feedmgr.rest.model.FeedCategory;
 import com.thinkbiganalytics.feedmgr.rest.model.FeedMetadata;
@@ -62,6 +65,7 @@ import com.thinkbiganalytics.feedmgr.rest.model.ImportTemplateOptions;
 import com.thinkbiganalytics.feedmgr.rest.model.NifiFeed;
 import com.thinkbiganalytics.feedmgr.rest.model.RegisteredTemplate;
 import com.thinkbiganalytics.feedmgr.rest.model.ReusableTemplateConnectionInfo;
+import com.thinkbiganalytics.feedmgr.rest.model.UserProperty;
 import com.thinkbiganalytics.feedmgr.rest.model.schema.PartitionField;
 import com.thinkbiganalytics.feedmgr.rest.support.SystemNamingService;
 import com.thinkbiganalytics.feedmgr.service.feed.importing.model.ImportFeed;
@@ -77,6 +81,7 @@ import com.thinkbiganalytics.jobrepo.rest.controller.JobsRestController;
 import com.thinkbiganalytics.jobrepo.rest.controller.ServiceLevelAssessmentsController;
 import com.thinkbiganalytics.json.ObjectMapperSerializer;
 import com.thinkbiganalytics.metadata.api.feed.Feed;
+import com.thinkbiganalytics.metadata.rest.model.data.Datasource;
 import com.thinkbiganalytics.metadata.rest.model.data.JdbcDatasource;
 import com.thinkbiganalytics.metadata.rest.model.sla.ServiceLevelAgreement;
 import com.thinkbiganalytics.metadata.rest.model.sla.ServiceLevelAssessment;
@@ -155,8 +160,8 @@ public class IntegrationTestBase {
     protected static final String FILTER_BY_FAILURE = "result%3D%3DFAILURE";
     protected static final String FILTER_BY_SLA_ID = "slaId%3D%3D";
 
-    protected static final String APP_NIFI = "NIFI";
-    protected static final String APP_HADOOP = "HADOOP";
+    protected static final String APP_NIFI = "nifi";
+    protected static final String APP_HADOOP = "hadoop";
 
     @SuppressWarnings("SpringJavaAutowiringInspection")
     @Inject
@@ -165,6 +170,10 @@ public class IntegrationTestBase {
     @SuppressWarnings("SpringJavaAutowiringInspection")
     @Inject
     private SshConfig sshConfig;
+
+    @SuppressWarnings("SpringJavaAutowiringInspection")
+    @Inject
+    private KubernetesConfig kubernetesConfig;
 
     protected void runAs(UserContext.User user) {
         UserContext.setUser(user);
@@ -253,8 +262,8 @@ public class IntegrationTestBase {
     }
 
     protected void copyDataToDropzone(String testFileName) {
-        runCommandOnRemoteSystem("sudo touch /var/dropzone/" + testFileName, APP_NIFI);
-        runCommandOnRemoteSystem("sudo chown -R nifi:nifi /var/dropzone", APP_NIFI);
+        runCommandOnRemoteSystem("touch /var/dropzone/" + testFileName, APP_NIFI);
+        runCommandOnRemoteSystem("chmod 777 /var/dropzone/" + testFileName, APP_NIFI);
     }
 
     protected void waitForFeedToComplete() {
@@ -298,39 +307,34 @@ public class IntegrationTestBase {
         LOG.info("Making request as " + username);
 
         return RestAssured.given().accept(JSON)
-            .log().method().log().path()
-            .auth().preemptive().basic(username, UserContext.getUser().getPassword())
-            .contentType(JSON);
+                .log().method().log().path()
+                .auth().preemptive().basic(username, UserContext.getUser().getPassword())
+                .contentType(JSON);
     }
 
     private void runLocalShellCommand(String command) {
         ProcessBuilder pb = new ProcessBuilder().command("bash", "-c", command);
-        try
-        {
+        try {
             System.out.println("RUNNING...");
             Process p = pb.start();
             StreamGobbler pOut = new StreamGobbler(p.getInputStream(), new PrintStream(System.out));
             StreamGobbler pErr = new StreamGobbler(p.getErrorStream(), new PrintStream(System.out));
             pOut.start();
             pErr.start();
-        }
-        catch(IOException ioe)
-        {
+        } catch (IOException ioe) {
             throw new RuntimeException("Error running command on remote system", ioe);
         }
     }
 
     protected final void copyFileLocalToRemote(final String localFile, final String remoteDir, String application) {
-        String testInfrastructureType = System.getenv("TestInfrastructureType");
-        LOG.info("Test Infrastructure type is: " + testInfrastructureType);
-        if(testInfrastructureType != null && "kubernetes".equals(testInfrastructureType)) {
-            String namespace = System.getenv("kubernetesNamespace");
+        LOG.info("Test Infrastructure type is: " + kyloConfig.getTestInfrastructureType());
+        if (kyloConfig.getTestInfrastructureType() != null && KyloConfig.TEST_INFRASTRUCTURE_TYPE_KUBERNETES.equals(kyloConfig.getTestInfrastructureType())) {
+            LOG.info("Kubernetes Namespace is: " + kubernetesConfig.getKubernetesNamespace());
             String getPodNameCommand = String.format("export KUBECTL_POD_NAME=$(kubectl get po -o jsonpath=\"{range .items[*]}{@.metadata.name}{end}\" -l app=%s)", application);
-            String kubeCommand = String.format("kubectl cp %s %s/$KUBECTL_POD_NAME:%s", localFile, namespace, remoteDir);
-
+            String kubeCommand = String.format("kubectl cp %s %s/$KUBECTL_POD_NAME:%s", localFile, kubernetesConfig.getKubernetesNamespace(), remoteDir);
+            LOG.info("The kube commands is: " + getPodNameCommand + ";" + kubeCommand);
             runLocalShellCommand(getPodNameCommand + ";" + kubeCommand);
-        }
-        else {
+        } else {
             Scp scp = new Scp() {
                 @Override
                 public String toString() {
@@ -345,20 +349,18 @@ public class IntegrationTestBase {
     }
 
     protected final void runCommandOnRemoteSystem(final String command, String application) {
-        String testInfrastructureType = System.getenv("TestInfrastructureType");
-        LOG.info("Test Infrastructure type is: " + testInfrastructureType);
-        if(testInfrastructureType != null && "kubernetes".equals(testInfrastructureType)) {
-            String hadoopPodName = System.getenv("HadoopPodName");
+        LOG.info("Test Infrastructure type is: " + kyloConfig.getTestInfrastructureType());
+        if (kyloConfig.getTestInfrastructureType() != null && KyloConfig.TEST_INFRASTRUCTURE_TYPE_KUBERNETES.equals(kyloConfig.getTestInfrastructureType())) {
+            LOG.info("Kubernetes Namespace is: " + kubernetesConfig.getKubernetesNamespace());
             String podAndApplicationName = application;
-            if(application.equals(APP_HADOOP)) {
-                podAndApplicationName = hadoopPodName;
+            if (application.equals(APP_HADOOP)) {
+                podAndApplicationName = kubernetesConfig.getHadoopPodName();
             }
             String getPodNameCommand = String.format("export KUBECTL_POD_NAME=$(kubectl get po -o jsonpath=\"{range .items[*]}{@.metadata.name}{end}\" -l app=%s)", podAndApplicationName);
-            String kubeCommand = String.format("kubectl exec $KUBECTL_POD_NAME -c %s %s", podAndApplicationName, command);
-
+            String kubeCommand = String.format("kubectl exec $KUBECTL_POD_NAME -c %s -- %s ", podAndApplicationName, command);
+            LOG.info("The kube commands is: " + getPodNameCommand + ";" + kubeCommand);
             runLocalShellCommand(getPodNameCommand + ";" + kubeCommand);
-        }
-        else {
+        } else {
             SSHExec ssh = new SSHExec() {
                 @Override
                 public String toString() {
@@ -381,10 +383,10 @@ public class IntegrationTestBase {
             p = Runtime.getRuntime().exec(command);
             p.waitFor();
             BufferedReader reader =
-                new BufferedReader(new InputStreamReader(p.getInputStream()));
+                    new BufferedReader(new InputStreamReader(p.getInputStream()));
 
             String line = "";
-            while ((line = reader.readLine())!= null) {
+            while ((line = reader.readLine()) != null) {
                 output.append(line + "\n");
             }
 
@@ -421,8 +423,8 @@ public class IntegrationTestBase {
 
     protected PortDTO[] getReusableInputPorts() {
         Response response = given(NifiIntegrationRestController.BASE)
-            .when()
-            .get(NifiIntegrationRestController.REUSABLE_INPUT_PORTS);
+                .when()
+                .get(NifiIntegrationRestController.REUSABLE_INPUT_PORTS);
 
         response.then().statusCode(HTTP_OK);
 
@@ -432,8 +434,8 @@ public class IntegrationTestBase {
 
     protected NifiFlowProcessGroup getFlow(String processGroupId) {
         Response response = given(NifiIntegrationRestController.BASE)
-            .when()
-            .get(NifiIntegrationRestController.FLOW+"/"+processGroupId);
+                .when()
+                .get(NifiIntegrationRestController.FLOW + "/" + processGroupId);
 
         response.then().statusCode(HTTP_OK);
 
@@ -442,6 +444,8 @@ public class IntegrationTestBase {
 
     protected void cleanup() {
 
+        deleteExistingDatasources();
+        deleteExistingDomainTypes();
         deleteExistingSla();
         disableExistingFeeds();
         deleteExistingFeeds();
@@ -462,6 +466,30 @@ public class IntegrationTestBase {
         }
         agreements = getSla();
         Assert.assertTrue(agreements.length == 0);
+
+    }
+
+    protected void deleteExistingDomainTypes() {
+        LOG.info("Deleting existing Domain Types");
+
+        DomainType[] domainTypes = getDomainTypes();
+        for (DomainType domainType : domainTypes) {
+            deleteDomainType(domainType.getId());
+        }
+        domainTypes = getDomainTypes();
+        Assert.assertTrue(domainTypes.length == 0);
+
+    }
+
+    protected void deleteExistingDatasources() {
+        LOG.info("Deleting existing Datasources");
+
+        Datasource[] datasources = getDatasources();
+        for (Datasource datasource : datasources) {
+            deleteDatasource(datasource.getId());
+        }
+        datasources = getDatasources();
+        Assert.assertTrue(datasources.length == 0);
 
     }
 
@@ -533,8 +561,8 @@ public class IntegrationTestBase {
         LOG.info("Deleting versioned nifi flow {}", groupId);
 
         Response response = given(NifiIntegrationRestController.BASE)
-            .when()
-            .get("/cleanup-versions/" + groupId);
+                .when()
+                .get("/cleanup-versions/" + groupId);
 
         response.then().statusCode(HTTP_OK);
     }
@@ -561,8 +589,8 @@ public class IntegrationTestBase {
 
     protected String getJsonPathOfProfileSummary(String feedId, String path) {
         Response response = given(FeedRestController.BASE)
-            .when()
-            .get(String.format("/%s/profile-summary", feedId));
+                .when()
+                .get(String.format("/%s/profile-summary", feedId));
 
         response.then().statusCode(HTTP_OK);
 
@@ -571,8 +599,8 @@ public class IntegrationTestBase {
 
     protected String getProfileStatsForColumn(String feedId, String processingDttm, String profileType, String column) {
         Response response = given(FeedRestController.BASE)
-            .when()
-            .get(String.format("/%s/profile-stats?processingdttm=%s", feedId, processingDttm));
+                .when()
+                .get(String.format("/%s/profile-stats?processingdttm=%s", feedId, processingDttm));
 
         response.then().statusCode(HTTP_OK);
 
@@ -583,8 +611,8 @@ public class IntegrationTestBase {
     protected DefaultExecutedJob getJobWithSteps(long executionId) {
         //http://localhost:8400/proxy/v1/jobs
         Response response = given(JobsRestController.BASE)
-            .when()
-            .get(String.format("/%s?includeSteps=true", executionId));
+                .when()
+                .get(String.format("/%s?includeSteps=true", executionId));
 
         response.then().statusCode(HTTP_OK);
 
@@ -592,10 +620,33 @@ public class IntegrationTestBase {
     }
 
     protected DefaultExecutedJob[] getJobs() {
-        //http://localhost:8400/proxy/v1/jobs
+        return getJobs(0, 10, null, null);
+    }
+
+    protected DefaultExecutedJob[] getJobs(Integer start, Integer limit, String sort, String filter) {
+
+        StringBuffer sb = new StringBuffer();
+        if (start == null) {
+            start = 0;
+        }
+        if (limit == null) {
+            limit = 10;
+        }
+        if (StringUtils.isBlank(sort)) {
+            sort = "-startTime";
+        }
+
+        sb.append("?limit=").append(limit)
+                .append("&sort=").append(sort)
+                .append("&start=").append(start);
+        if (StringUtils.isNotBlank(filter)) {
+            sb.append("&filter=").append(filter);
+        }
+
         Response response = given(JobsRestController.BASE)
-            .when()
-            .get();
+                .urlEncodingEnabled(false) //url encoding enabled false to avoid replacing percent symbols in url query part
+                .when()
+                .get(sb.toString());
 
         response.then().statusCode(HTTP_OK);
 
@@ -604,9 +655,9 @@ public class IntegrationTestBase {
 
     protected DefaultExecutedJob[] getJobs(String filter) {
         Response response = given(JobsRestController.BASE)
-            .urlEncodingEnabled(false) //url encoding enabled false to avoid replacing percent symbols in url query part
-            .when()
-            .get("?filter=" + filter + "&limit=50&sort=-createTime&start=0");
+                .urlEncodingEnabled(false) //url encoding enabled false to avoid replacing percent symbols in url query part
+                .when()
+                .get("?filter=" + filter + "&limit=50&sort=-createTime&start=0");
 
         response.then().statusCode(HTTP_OK);
 
@@ -615,9 +666,9 @@ public class IntegrationTestBase {
 
     protected DefaultExecutedJob failJob(DefaultExecutedJob job) {
         Response response = given(JobsRestController.BASE)
-            .body(new JobAction())
-            .when()
-            .post(String.format("/%s/fail", job.getInstanceId()));
+                .body(new JobAction())
+                .when()
+                .post(String.format("/%s/fail", job.getInstanceId()));
 
         response.then().statusCode(HTTP_OK);
 
@@ -628,8 +679,8 @@ public class IntegrationTestBase {
         LOG.info("Abandon all jobs");
 
         Response response = given(JobsRestController.BASE)
-            .when()
-            .post(String.format("/abandon-all/%s", categoryAndFeedName));
+                .when()
+                .post(String.format("/abandon-all/%s", categoryAndFeedName));
 
         response.then().statusCode(HTTP_NO_CONTENT);
     }
@@ -638,9 +689,9 @@ public class IntegrationTestBase {
         LOG.info("Creating feed {}", feed.getFeedName());
 
         Response response = given(FeedRestController.BASE)
-            .body(feed)
-            .when()
-            .post();
+                .body(feed)
+                .when()
+                .post();
 
         response.then().statusCode(HTTP_OK);
 
@@ -662,6 +713,10 @@ public class IntegrationTestBase {
 
     protected DefaultField newStringField(String name) {
         return newNamedField(name, new DefaultDataTypeDescriptor(), "string");
+    }
+
+    protected DefaultField newField(String name, String type) {
+        return newNamedField(name, new DefaultDataTypeDescriptor(), type);
     }
 
     protected DefaultField newTimestampField(String name) {
@@ -695,8 +750,8 @@ public class IntegrationTestBase {
 
     protected Response getCategoriesExpectingStatus(int expectedStatusCode) {
         Response response = given(FeedCategoryRestController.BASE)
-            .when()
-            .get();
+                .when()
+                .get();
 
         response.then().statusCode(expectedStatusCode);
         return response;
@@ -714,6 +769,22 @@ public class IntegrationTestBase {
     protected Response getCategoryByName(String categoryName) {
         String url = String.format("/by-name/%s", categoryName);
         Response response = given(FeedCategoryRestController.BASE)
+                .when()
+                .get(url);
+        return response;
+    }
+
+    protected Response getFeedById(String feedId) {
+        String url = String.format("/%s", feedId);
+        Response response = given(FeedRestController.BASE)
+            .when()
+            .get(url);
+        return response;
+    }
+
+    protected Response getCategoryById(String categoryId) {
+        String url = String.format("/by-id/%s", categoryId);
+        Response response = given(FeedCategoryRestController.BASE)
             .when()
             .get(url);
         return response;
@@ -724,24 +795,58 @@ public class IntegrationTestBase {
 
         String url = String.format("/%s", id);
         Response response = given(FeedCategoryRestController.BASE)
-            .when()
-            .delete(url);
+                .when()
+                .delete(url);
 
         response.then().statusCode(HTTP_OK);
     }
 
     protected FeedCategory createCategory(String name) {
+        return createCategory(name, "this category was created by functional test", true, null);
+    }
+
+    protected FeedCategory createCategory(String name, String description) {
+        return createCategory(name, description, true, null);
+    }
+
+    protected FeedCategory createCategory(String name, String description, boolean allowIndexing) {
+        return createCategory(name, description, allowIndexing, null);
+    }
+
+    protected FeedCategory createCategory(String name, String description, boolean allowIndexing, Set<UserProperty> userProperties) {
         LOG.info("Creating category {}", name);
 
         FeedCategory category = new FeedCategory();
         category.setName(name);
         category.setSystemName(SystemNamingService.generateSystemName(name));
-        category.setDescription("this category was created by functional test");
+        category.setDescription(description);
         category.setIcon("account_balance");
         category.setIconColor("#FF8A65");
+        category.setAllowIndexing(allowIndexing);
+
+        if (userProperties!=null) {
+            category.setUserProperties(userProperties);
+        }
+
+        RestAssured.defaultParser = Parser.JSON;
+
+        ObjectMapperSerializer.serialize(category);
 
         Response response = given(FeedCategoryRestController.BASE)
-            .body(category)
+                .body(category)
+                .when()
+                .post();
+
+        response.then().statusCode(HTTP_OK);
+
+        return response.as(FeedCategory.class);
+    }
+
+    protected FeedCategory createCategory(FeedCategory feedCategory) {
+        LOG.info("Creating category {}", feedCategory.getName());
+
+        Response response = given(FeedCategoryRestController.BASE)
+            .body(feedCategory)
             .when()
             .post();
 
@@ -750,16 +855,15 @@ public class IntegrationTestBase {
         return response.as(FeedCategory.class);
     }
 
-
     protected ImportFeed importFeed(String feedPath) {
         LOG.info("Importing feed {}", feedPath);
 
         Response post = given(AdminController.BASE)
-            .contentType("multipart/form-data")
-            .multiPart(new File(feedPath))
-            .multiPart("overwrite", true)
-            .multiPart("importConnectingReusableFlow", ImportTemplateOptions.IMPORT_CONNECTING_FLOW.YES)
-            .when().post(AdminController.IMPORT_FEED);
+                .contentType("multipart/form-data")
+                .multiPart(new File(feedPath))
+                .multiPart("overwrite", true)
+                .multiPart("importConnectingReusableFlow", ImportTemplateOptions.IMPORT_CONNECTING_FLOW.YES)
+                .when().post(AdminController.IMPORT_FEED);
 
         post.then().statusCode(HTTP_OK);
 
@@ -775,12 +879,12 @@ public class IntegrationTestBase {
         LOG.info("Importing template {}", templatePath);
 
         Response post = given(AdminController.BASE)
-            .contentType("multipart/form-data")
-            .multiPart(new File(templatePath))
-            .multiPart("overwrite", true)
-            .multiPart("createReusableFlow", false)
-            .multiPart("importConnectingReusableFlow", ImportTemplateOptions.IMPORT_CONNECTING_FLOW.YES)
-            .when().post(AdminController.IMPORT_TEMPLATE);
+                .contentType("multipart/form-data")
+                .multiPart(new File(templatePath))
+                .multiPart("overwrite", true)
+                .multiPart("createReusableFlow", false)
+                .multiPart("importConnectingReusableFlow", ImportTemplateOptions.IMPORT_CONNECTING_FLOW.YES)
+                .when().post(AdminController.IMPORT_TEMPLATE);
 
         post.then().statusCode(HTTP_OK);
 
@@ -801,11 +905,11 @@ public class IntegrationTestBase {
         String uploadKey = UUID.randomUUID().toString();
 
         Response post = given(AdminControllerV2.BASE)
-            .contentType("multipart/form-data")
-            .multiPart(new File(templatePath))
-            .multiPart("uploadKey", uploadKey)
-            .multiPart("importComponents", importOptions)
-            .when().post(AdminControllerV2.IMPORT_TEMPLATE);
+                .contentType("multipart/form-data")
+                .multiPart(new File(templatePath))
+                .multiPart("uploadKey", uploadKey)
+                .multiPart("importComponents", importOptions)
+                .when().post(AdminControllerV2.IMPORT_TEMPLATE);
 
         post.then().statusCode(HTTP_OK);
 
@@ -820,8 +924,8 @@ public class IntegrationTestBase {
 
     protected Response getFeedsExpectingStatus(int expectedStatusCode) {
         Response response = given(FeedRestController.BASE)
-            .when()
-            .get();
+                .when()
+                .get();
 
         response.then().statusCode(expectedStatusCode);
         return response;
@@ -839,8 +943,8 @@ public class IntegrationTestBase {
     protected Response disableFeedExpecting(String feedId, int statusCode) {
         String url = String.format("/disable/%s", feedId);
         Response response = given(FeedRestController.BASE)
-            .when()
-            .post(url);
+                .when()
+                .post(url);
 
         response.then().statusCode(statusCode);
         return response;
@@ -858,8 +962,8 @@ public class IntegrationTestBase {
     protected Response enableFeedExpecting(String feedId, int statusCode) {
         String url = String.format("/enable/%s", feedId);
         Response response = given(FeedRestController.BASE)
-            .when()
-            .post(url);
+                .when()
+                .post(url);
 
         response.then().statusCode(statusCode);
         return response;
@@ -873,8 +977,8 @@ public class IntegrationTestBase {
     protected void deleteFeedExpecting(String feedId, int statusCode) {
         String url = String.format("/%s", feedId);
         Response response = given(FeedRestController.BASE)
-            .when()
-            .delete(url);
+                .when()
+                .delete(url);
 
 //        if (response.statusCode() == 409) {
 //            RestResponseStatus responseStatus = response.body().as(RestResponseStatus.class);
@@ -891,8 +995,8 @@ public class IntegrationTestBase {
 
     protected Response exportFeedExpecting(String feedId, int code) {
         Response response = given(AdminController.BASE)
-            .when()
-            .get("/export-feed/" + feedId);
+                .when()
+                .get("/export-feed/" + feedId);
 
         response.then().statusCode(code);
         return response;
@@ -904,7 +1008,7 @@ public class IntegrationTestBase {
 
     protected Response getTemplatesExpectingStatus(int expectedStatusCode) {
         Response response = given(TemplatesRestController.BASE)
-            .when().get(TemplatesRestController.REGISTERED);
+                .when().get(TemplatesRestController.REGISTERED);
 
         response.then().statusCode(expectedStatusCode);
         return response;
@@ -915,8 +1019,8 @@ public class IntegrationTestBase {
 
         String url = String.format("/registered/%s/delete", templateId);
         Response response = given(TemplatesRestController.BASE)
-            .when()
-            .delete(url);
+                .when()
+                .delete(url);
 
         response.then().statusCode(HTTP_OK);
     }
@@ -925,8 +1029,8 @@ public class IntegrationTestBase {
         LOG.info("Asserting hive schema");
 
         Response response = given(HiveRestController.BASE)
-            .when()
-            .get(String.format("/schemas/%s/tables/%s", schemaName, tableName));
+                .when()
+                .get(String.format("/schemas/%s/tables/%s", schemaName, tableName));
 
         response.then().statusCode(HTTP_OK);
         return response.as(DefaultHiveSchema.class);
@@ -936,8 +1040,8 @@ public class IntegrationTestBase {
         LOG.info("Asserting hive tables");
 
         Response response = given(HiveRestController.BASE)
-            .when()
-            .get("/tables");
+                .when()
+                .get("/tables");
 
         response.then().statusCode(HTTP_OK);
 
@@ -955,8 +1059,8 @@ public class IntegrationTestBase {
 
         int limit = 10;
         Response response = given(HiveRestController.BASE)
-            .when()
-            .get("/query-result?query=" + query);
+                .when()
+                .get("/query-result?query=" + query);
 
         response.then().statusCode(HTTP_OK);
 
@@ -965,8 +1069,8 @@ public class IntegrationTestBase {
 
     protected ActionGroup getServicePermissions(String group) {
         Response allowed = given(AccessControlController.BASE)
-            .when()
-            .get("/services/allowed?group=" + group);
+                .when()
+                .get("/services/allowed?group=" + group);
 
         allowed.then().statusCode(HTTP_OK);
         return allowed.as(ActionGroup.class);
@@ -974,9 +1078,9 @@ public class IntegrationTestBase {
 
     protected ActionGroup setServicePermissions(PermissionsChange permissionsChange) {
         Response response = given(AccessControlController.BASE)
-            .body(permissionsChange)
-            .when()
-            .post("/services/allowed");
+                .body(permissionsChange)
+                .when()
+                .post("/services/allowed");
 
         response.then().statusCode(HTTP_OK);
 
@@ -990,9 +1094,9 @@ public class IntegrationTestBase {
 
     protected Response setFeedEntityPermissionsExpectingStatus(RoleMembershipChange roleChange, String feedId, int httpStatus) {
         Response response = given(FeedRestController.BASE)
-            .body(roleChange)
-            .when()
-            .post(String.format("/%s/roles", feedId));
+                .body(roleChange)
+                .when()
+                .post(String.format("/%s/roles", feedId));
 
         response.then().statusCode(httpStatus);
         return response;
@@ -1005,9 +1109,9 @@ public class IntegrationTestBase {
 
     protected Response setCategoryEntityPermissionsExpectingStatus(RoleMembershipChange roleChange, String categoryId, int httpStatus) {
         Response response = given(FeedCategoryRestController.BASE)
-            .body(roleChange)
-            .when()
-            .post(String.format("/%s/roles", categoryId));
+                .body(roleChange)
+                .when()
+                .post(String.format("/%s/roles", categoryId));
 
         response.then().statusCode(httpStatus);
         return response;
@@ -1016,8 +1120,8 @@ public class IntegrationTestBase {
 
     protected void assertValidatorResults(String feedId, String processingDttm, String validator, int invalidRowCount) {
         Response response = given(FeedRestController.BASE)
-            .when()
-            .get(String.format("/%s/profile-invalid-results?filter=%s&limit=100&processingdttm=%s", feedId, validator, processingDttm));
+                .when()
+                .get(String.format("/%s/profile-invalid-results?filter=%s&limit=100&processingdttm=%s", feedId, validator, processingDttm));
 
         response.then().statusCode(HTTP_OK);
         Object[] result = response.as(Object[].class);
@@ -1053,19 +1157,19 @@ public class IntegrationTestBase {
         rule.setCondition(ObligationGroup.Condition.REQUIRED);
 
         rule.setProperties(newFieldRuleProperties(
-            newFieldRuleProperty("FeedName", "feedName", feedName),
-            newFieldRuleProperty("ExpectedDeliveryTime", "cronString", cronExpression),
-            newFieldRuleProperty("NoLaterThanTime", "lateTime", noLaterThanHours),
-            newFieldRuleProperty("NoLaterThanUnits", "lateUnits", "hrs")
+                newFieldRuleProperty("FeedName", "feedName", feedName),
+                newFieldRuleProperty("ExpectedDeliveryTime", "cronString", cronExpression),
+                newFieldRuleProperty("NoLaterThanTime", "lateTime", noLaterThanHours),
+                newFieldRuleProperty("NoLaterThanUnits", "lateUnits", "hrs")
         ));
 
         rules.add(rule);
         sla.setRules(rules);
 
         Response response = given(ServiceLevelAgreementRestController.V1_FEEDMGR_SLA)
-            .body(sla)
-            .when()
-            .post(String.format("feed/%s", feedId));
+                .body(sla)
+                .when()
+                .post(String.format("feed/%s", feedId));
 
         response.then().statusCode(HTTP_OK);
 
@@ -1080,9 +1184,9 @@ public class IntegrationTestBase {
         si.setGroup("SLA");
 
         Response response = given(SchedulerRestController.V1_SCHEDULER)
-            .body(si)
-            .when()
-            .post("/jobs/trigger");
+                .body(si)
+                .when()
+                .post("/jobs/trigger");
 
         response.then().statusCode(HTTP_OK);
 
@@ -1093,9 +1197,9 @@ public class IntegrationTestBase {
         LOG.info(String.format("Getting up to 50 SLA Assessments for filter %s", filter));
 
         Response response = given(ServiceLevelAssessmentsController.BASE)
-            .urlEncodingEnabled(false) //url encoding enabled false to avoid replacing percent symbols in url query part
-            .when()
-            .get("?filter=" + filter + "&limit=50&sort=-createdTime&start=0");
+                .urlEncodingEnabled(false) //url encoding enabled false to avoid replacing percent symbols in url query part
+                .when()
+                .get("?filter=" + filter + "&limit=50&sort=-createdTime&start=0");
 
         response.then().statusCode(HTTP_OK);
 
@@ -1108,8 +1212,8 @@ public class IntegrationTestBase {
         LOG.info("Getting SLAs");
 
         Response response = given(ServiceLevelAgreementRestController.V1_FEEDMGR_SLA)
-            .when()
-            .get();
+                .when()
+                .get();
 
         response.then().statusCode(HTTP_OK);
         return response.as(ServiceLevelAgreement[].class);
@@ -1120,8 +1224,8 @@ public class IntegrationTestBase {
         LOG.info("Deleting SLA " + slaId);
 
         Response response = given(ServiceLevelAgreementRestController.V1_FEEDMGR_SLA)
-            .when()
-            .delete(String.format("/%s", slaId));
+                .when()
+                .delete(String.format("/%s", slaId));
 
         response.then().statusCode(HTTP_OK);
     }
@@ -1130,8 +1234,8 @@ public class IntegrationTestBase {
         LOG.info("Getting up to 10 non-cleared Alerts");
 
         Response response = given(AlertsController.V1_ALERTS)
-            .when()
-            .get("?cleared=false&limit=10");
+                .when()
+                .get("?cleared=false&limit=10");
 
         response.then().statusCode(HTTP_OK);
 
@@ -1143,9 +1247,9 @@ public class IntegrationTestBase {
         LOG.info("Creating datasource '{}'", ds.getName());
 
         Response response = given(DatasourceController.BASE)
-            .body(ds)
-            .when()
-            .post();
+                .body(ds)
+                .when()
+                .post();
 
         response.then().statusCode(HTTP_OK);
 
@@ -1156,8 +1260,8 @@ public class IntegrationTestBase {
         LOG.info("Getting datasources");
 
         Response response = given(DatasourceController.BASE)
-            .when()
-            .get("?type=UserDatasource");
+                .when()
+                .get("?type=UserDatasource");
 
         response.then().statusCode(HTTP_OK);
 
@@ -1174,8 +1278,8 @@ public class IntegrationTestBase {
         LOG.info("Getting datasource {}, expecting status {}", datasourceId, status);
 
         Response response = given(DatasourceController.BASE)
-            .when()
-            .get("/" + datasourceId);
+                .when()
+                .get("/" + datasourceId);
 
         response.then().statusCode(status);
         return response;
@@ -1185,18 +1289,65 @@ public class IntegrationTestBase {
         LOG.info("Getting datasources");
 
         Response response = given(DatasourceController.BASE)
-            .when()
-            .delete("/" + controllerServiceId);
+                .when()
+                .delete("/" + controllerServiceId);
 
         response.then().statusCode(HTTP_NO_CONTENT);
     }
+
+    protected DomainType[] getDomainTypes() {
+        LOG.info("Getting domain types");
+        Response response = given(DomainTypesController.BASE).get();
+        response.then().statusCode(HTTP_OK);
+        return response.as(DomainType[].class);
+    }
+
+    protected DomainType createDomainType(DomainType dt) {
+        LOG.info("Creating domain type '{}'", dt.getTitle());
+
+        Response response = given(DomainTypesController.BASE)
+                .body(dt)
+                .when()
+                .post();
+
+        response.then().statusCode(HTTP_OK);
+
+        return response.as(DomainType.class);
+    }
+
+    protected DomainType getDomainType(String domainTypeId) {
+        LOG.info("Getting domain type {}", domainTypeId);
+        return getDomainTypeExpectingStatus(domainTypeId, HTTP_OK).as(DomainType.class);
+    }
+
+    protected Response getDomainTypeExpectingStatus(String domainTypeId, int status) {
+        LOG.info("Getting domain type {}, expecting status {}", domainTypeId, status);
+
+        Response response = given(DomainTypesController.BASE)
+                .when()
+                .get("/" + domainTypeId);
+
+        response.then().statusCode(status);
+        return response;
+    }
+
+    protected void deleteDomainType(String domainTypeId) {
+        LOG.info("Getting datasources");
+
+        Response response = given(DomainTypesController.BASE)
+                .when()
+                .delete("/" + domainTypeId);
+
+        response.then().statusCode(HTTP_NO_CONTENT);
+    }
+
 
     protected FeedVersions getVersions(String feedId) {
         LOG.info("Getting versions for feed {}", feedId);
 
         Response response = given(FeedRestController.BASE)
-            .when()
-            .get(String.format("/%s/versions", feedId));
+                .when()
+                .get(String.format("/%s/versions", feedId));
 
         response.then().statusCode(HTTP_OK);
 
@@ -1207,8 +1358,8 @@ public class IntegrationTestBase {
         LOG.info("Getting difference from version {} to version {} for feed {}", fromVersion, toVersion, feedId);
 
         Response response = given(FeedRestController.BASE)
-            .when()
-            .get(String.format("/%s/versions/%s/diff/%s", feedId, fromVersion, toVersion));
+                .when()
+                .get(String.format("/%s/versions/%s/diff/%s", feedId, fromVersion, toVersion));
 
         response.then().statusCode(HTTP_OK);
 
