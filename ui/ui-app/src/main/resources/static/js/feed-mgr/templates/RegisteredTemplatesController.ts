@@ -1,11 +1,12 @@
 import * as angular from 'angular';
-import AccessControlService from "../../services/AccessControlService";
+import {AccessControlService} from "../../services/AccessControlService";
 import { moduleName } from "./module-name";
 import { ListTableView } from "../../services/ListTableViewTypes";
 import PaginationData = ListTableView.PaginationData;
 import SortOption = ListTableView.SortOption;
-import StateService from '../../services/StateService';
+import {StateService} from '../../services/StateService';
 import { RegisterTemplateServiceFactory } from '../services/RegisterTemplateServiceFactory';
+import './module-require';
 
 export class RegisteredTemplatesController {
 
@@ -217,10 +218,11 @@ export class RegisteredTemplatesController {
     }
 }
 
-angular.module(moduleName).component('registeredTemplatesController', {
+const module = angular.module(moduleName).component('registeredTemplatesController', {
 
-    templateUrl: 'js/feed-mgr/templates/registered-templates.html',
+    templateUrl: './registered-templates.html',
     controller: RegisteredTemplatesController,
     controllerAs: 'vm'
 
 });
+export default module;

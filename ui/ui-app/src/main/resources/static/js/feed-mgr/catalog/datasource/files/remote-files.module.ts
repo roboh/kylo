@@ -22,6 +22,8 @@ import {CovalentNotificationsModule} from '@covalent/core/notifications';
 import {MatDialogModule} from '@angular/material/dialog';
 import {BrowserModule} from '../api/browser.module';
 import {CovalentLoadingModule} from '@covalent/core/loading';
+import {MatToolbarModule} from "@angular/material/toolbar";
+import {MatIconModule} from "@angular/material/icon";
 
 @NgModule({
     declarations: [
@@ -29,6 +31,9 @@ import {CovalentLoadingModule} from '@covalent/core/loading';
     ],
     entryComponents: [
         RemoteFilesComponent,
+    ],
+    exports:[
+        RemoteFilesComponent
     ],
     imports: [
         BrowserModule,
@@ -51,8 +56,20 @@ import {CovalentLoadingModule} from '@covalent/core/loading';
         MatSelectModule,
         MatCheckboxModule,
         MatDialogModule,
-        UIRouterModule.forChild({states: remoteFileStates})
+        UIRouterModule,
+        MatToolbarModule,
+        MatIconModule
+
     ]
 })
 export class RemoteFilesModule {
+}
+
+@NgModule({
+    imports: [
+        RemoteFilesModule,
+        UIRouterModule.forChild({states: remoteFileStates})
+    ]
+})
+export class RemoteFilesRouterModule {
 }

@@ -1,9 +1,10 @@
 import {Transition} from "@uirouter/core";
 import * as angular from 'angular';
-import AccessControlService from '../../services/AccessControlService';
+import {AccessControlService} from '../../services/AccessControlService';
 
-const moduleName = require('feed-mgr/categories/module-name');
+const moduleName = require('./module-name');
 
+import './module-require';
 
 export class CategoryDetailsController {
 
@@ -69,6 +70,7 @@ export class CategoryDetailsController {
     * Loads the category data once the list of categories has loaded.
     */
     onLoad() {
+        console.log('CategoryDetailsController onLoad');
         if (angular.isString(this.$transition$.params().categoryId)) {
             this.model = this.CategoriesService.model = this.CategoriesService.findCategory(this.$transition$.params().categoryId);
             if (angular.isDefined(this.CategoriesService.model)) {
@@ -98,11 +100,12 @@ export class CategoryDetailsController {
     }
 
 }
-angular.module(moduleName).component('categoryDetailsController', {
+const module = angular.module(moduleName).component('categoryDetailsController', {
     bindings: {
         $transition$: "<"
     },
     controller: CategoryDetailsController,
     controllerAs: "vm",
-    templateUrl: 'js/feed-mgr/categories/category-details.html'
+    templateUrl: './category-details.html'
 });
+export default module;

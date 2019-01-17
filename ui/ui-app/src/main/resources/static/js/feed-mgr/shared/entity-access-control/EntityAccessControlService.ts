@@ -1,14 +1,14 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
 import AccessConstants from '../../../constants/AccessConstants';
-import AccessControlService from '../../../services/AccessControlService';
-const moduleName = require('feed-mgr/module-name');
+import {AccessControlService} from '../../../services/AccessControlService';
+import {moduleName} from "../../module-name";
 
 
 export class EntityAccessControlService extends AccessConstants{
 
     roleUrlsMap: any;
-    public static entityRoleTypes: any ={ CATEGORY: "category", CATEGORY_FEED: "category-feed", FEED: "feed", TEMPLATE: "template", DATASOURCE: "datasource" };
+    public static entityRoleTypes: any ={ CATEGORY: "category", CATEGORY_FEED: "category-feed", FEED: "feed", TEMPLATE: "template", DATASOURCE: "datasource",  CONNECTOR: "connector" };
 
 
 
@@ -20,7 +20,8 @@ export class EntityAccessControlService extends AccessConstants{
             "category": RestUrlService.CATEGORY_ROLES_URL,
             "category-feed": RestUrlService.CATEGORY_FEED_ROLES_URL,
             "template": RestUrlService.TEMPLATE_ROLES_URL,
-            "datasource": RestUrlService.DATASOURCE_ROLES_URL
+            "datasource": RestUrlService.DATASOURCE_ROLES_URL,
+            "connector": RestUrlService.CONNECTOR_ROLES_URL
         };
     }
     augmentRoleWithUiModel(roleMembership: any) {
@@ -192,6 +193,8 @@ export class EntityAccessControlService extends AccessConstants{
             url = this.RestUrlService.TEMPLATE_ROLES_URL(entityId);
         } else if (entityType === "datasource") {
             url = this.RestUrlService.DATASOURCE_ROLES_URL(entityId);
+        }else if (entityType === "connector") {
+            url = this.RestUrlService.CONNECTOR_ROLES_URL(entityId);
         }
         //construct a RoleMembershipChange object
         var changes = this.toRoleMembershipChange(roleMemberships);
@@ -217,7 +220,7 @@ export class EntityAccessControlService extends AccessConstants{
                 callbackFn(responses);
             }
             defer.resolve(responses);
-        });
+        }, (err: any) => defer.reject(err));
         return defer.promise;
     }
 
@@ -225,4 +228,4 @@ export class EntityAccessControlService extends AccessConstants{
 }
 
 
-angular.module(moduleName).service('EntityAccessControlService', EntityAccessControlService);
+//angular.module(moduleName).service('EntityAccessControlService', EntityAccessControlService);

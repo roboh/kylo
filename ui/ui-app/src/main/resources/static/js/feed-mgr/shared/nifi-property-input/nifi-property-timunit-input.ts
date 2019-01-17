@@ -1,6 +1,6 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 const SECONDS_PER_YEAR: number = 31536000;
 const SECONDS_PER_MONTH: number = 2592000;
@@ -133,7 +133,7 @@ angular.module(moduleName)
     .component('nifiPropertyTimeUnitInput', {
         controller: controller,
         controllerAs: "vm",
-        templateUrl: 'js/feed-mgr/shared/nifi-property-input/nifi-property-timeunit-input.html',
+        templateUrl: './nifi-property-timeunit-input.html',
         bindings: {
             property: '=',
             timePeriods: '=?'

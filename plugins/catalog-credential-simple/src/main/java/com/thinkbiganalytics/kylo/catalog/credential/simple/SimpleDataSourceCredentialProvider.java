@@ -23,23 +23,44 @@ package com.thinkbiganalytics.kylo.catalog.credential.simple;
  * #L%
  */
 
-import com.thinkbiganalytics.kylo.catalog.credential.spi.DataSourceCredentialProvider;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.thinkbiganalytics.json.ObjectMapperSerializer;
+import com.thinkbiganalytics.kylo.catalog.credential.spi.AbstractDataSourceCredentialProvider;
 import com.thinkbiganalytics.kylo.catalog.rest.model.DataSource;
 
+import org.apache.commons.io.IOUtils;
+import org.springframework.core.io.Resource;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  *
  */
-public class SimpleDataSourceCredentialProvider implements DataSourceCredentialProvider {
+public class SimpleDataSourceCredentialProvider extends AbstractDataSourceCredentialProvider {
 
-    /**
-     * 
-     */
+    private static final TypeReference<Map<String, Credentials>> CRED_MAP_TYPE = new TypeReference<Map<String, Credentials>>() { };
+
+    /** Map of connector credentials */
+    private Map<String, Credentials> credentials = new HashMap<>();
+
     public SimpleDataSourceCredentialProvider() {
+        super();
+    }
+    
+    public SimpleDataSourceCredentialProvider(Map<String, Credentials> creds) {
+        this.credentials.putAll(creds);
+    }
+    
+    public void loadCredentials(Resource configResource) throws IOException {
+        final String connectionsJson = IOUtils.toString(configResource.getInputStream(), StandardCharsets.UTF_8);
+        final Map<String, Credentials> loaded = ObjectMapperSerializer.deserialize(connectionsJson, CRED_MAP_TYPE);
+        this.credentials.putAll(loaded);
     }
 
     /* (non-Javadoc)
@@ -47,36 +68,18 @@ public class SimpleDataSourceCredentialProvider implements DataSourceCredentialP
      */
     @Override
     public boolean accepts(DataSource ds) {
-        return true;
+        String connId = ds.getConnector().getId();
+        return this.credentials.containsKey(connId);
     }
 
-    /* (non-Javadoc)
-     * @see com.thinkbiganalytics.kylo.catalog.credential.spi.DataSourceCredentialProvider#applyCredentials(com.thinkbiganalytics.kylo.catalog.rest.model.DataSource)
-     */
     @Override
-    public DataSource applyCredentials(DataSource ds, Set<Principal> principals) {
-        // TODO Implement this
-        return ds;
-    }
-    
-    /* (non-Javadoc)
-     * @see com.thinkbiganalytics.kylo.catalog.credential.spi.DataSourceCredentialProvider#applyPlaceholders(com.thinkbiganalytics.kylo.catalog.rest.model.DataSource, java.util.Set)
-     */
-    @Override
-    public DataSource applyPlaceholders(DataSource ds, Set<Principal> principals) {
-        // TODO Implement this
-        return ds;
+    public Void removeCredentials(DataSource ds) {
+        this.credentials.remove(ds.getConnector().getId());
+        return null;
     }
 
-    /* (non-Javadoc)
-     * @see com.thinkbiganalytics.kylo.catalog.credential.spi.DataSourceCredentialProvider#getCredentials(com.thinkbiganalytics.kylo.catalog.rest.model.DataSource)
-     */
-    @Override
-    public Map<String, String> getCredentials(DataSource ds, Set<Principal> principals) {
-        // TODO Implement this
-        Map<String, String> creds = new HashMap<>();
-        creds.put("password", "ThisIsAPassword");
-        return creds;
+    protected Optional<Credentials> doGetCredentials(DataSource ds, Set<Principal> principals) {
+        String id = ds.getConnector().getId();
+        return Optional.ofNullable(this.credentials.get(id));
     }
-
 }

@@ -27,28 +27,39 @@ export class PreviewRawService  extends AbstractSchemaTransformService{
         super(http,transformResponeTableBuilder)
     }
 
+    /**
+     * Transform the first file in the dataset
+     * @param {PreviewFileDataSet} previewDataSet
+     * @return {Observable<TransformResponse>}
+     */
+    transformRaw(previewDataSet: PreviewFileDataSet):Observable<TransformResponse> {
+        let firstFile = previewDataSet.files[0].filePath;
+        let sparkScript = "var df = sqlContext.read.format(\"text\").load(\""+firstFile+"\")";
+        let sparkScriptWithLimit = this.limitSparkScript(sparkScript);
+        return  this.transform(sparkScriptWithLimit);
+    }
 
+    /**
+     * Preview the data with inline RAW script
+     * NOTE its preferred to use the previewAsTextOrBinary method in the preview-schema.service.ts
+     * @param {PreviewFileDataSet} previewDataSet
+     * @return {Observable<PreviewDataSet>}
+     */
     preview(previewDataSet: PreviewFileDataSet) :Observable<PreviewDataSet>{
+
         if(previewDataSet.raw == undefined && previewDataSet.allowsRawView) {
-            previewDataSet.loading=true;
-
-            let firstFile = previewDataSet.files[0].filePath;
-
-            let sparkScript = "var df = sqlContext.read.format(\"text\").load(\""+firstFile+"\")";
-
             let previewDataSetSource = new Subject<PreviewDataSet>()
             let previewedDataSet$ = previewDataSetSource.asObservable();
 
+            previewDataSet.start(true)
 
-            let sparkScriptWithLimit = this.limitSparkScript(sparkScript);
-            this.transform(sparkScriptWithLimit).subscribe((data: TransformResponse) => {
+           this.transformRaw(previewDataSet).subscribe((data: TransformResponse) => {
                 let preview = this.transformResponeTableBuilder.buildTable(data);
-                previewDataSet.raw = preview;
-                previewDataSet.clearRawError();
-                previewDataSet.finishedLoading()
+                previewDataSet.success(preview,true)
                 previewDataSetSource.next(previewDataSet)
             }, error1 => {
-                previewDataSet.finishedLoading()
+               previewDataSet.error(true,"Error previewing data "+error1)
+                previewDataSet.rawLoading = false;
                 previewDataSet.rawError("Error previewing the raw data " + error1)
                 previewDataSetSource.error(previewDataSet)
             });
@@ -60,7 +71,13 @@ export class PreviewRawService  extends AbstractSchemaTransformService{
     }
 
     limitSparkScript(sparkScript:string) {
-        let sparkScriptWithLimit = "import org.apache.spark.sql._\n" + sparkScript + "\ndf=df.limit(20)\n df";
+        //LIVY doesnt like the trailing df variable.
+        //Spark Shell needs it
+        let appendTrailingDf = true;
+        let sparkScriptWithLimit = "import org.apache.spark.sql._\n" + sparkScript + "\ndf=df.limit(20)\n";
+        if(appendTrailingDf) {
+            sparkScriptWithLimit+="df";
+        }
         return sparkScriptWithLimit;
     }
 
@@ -69,7 +86,7 @@ export class PreviewRawService  extends AbstractSchemaTransformService{
     transform(script:string) :Observable<TransformResponse>{
         let request: TransformRequest = {
             script:script,
-            pageSpec:new PageSpec(),
+            pageSpec:new PageSpec({firstRow : 0,numRows : 20, firstCol : 0, numCols : 100}),
             doProfile:false,
             doValidate:false
         }

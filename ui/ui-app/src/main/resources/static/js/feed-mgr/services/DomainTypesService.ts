@@ -14,7 +14,7 @@
  * @property {string} regexPattern - regular expression pattern for matching sample values
  * @property {string} title a human-readable title
  */
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../module-name";;
 import * as angular from 'angular';
 import * as _ from "underscore";
 
@@ -277,10 +277,6 @@ export class DomainTypesService{
 }
 
 
-  angular.module(moduleName).factory("DomainTypesService", ["$http", "$q", "RestUrlService",
-  function($http: any,$q: any,RestUrlService:any){
-        return new DomainTypesService($http , $q, RestUrlService);
-  }
-  ]);
+
 
 

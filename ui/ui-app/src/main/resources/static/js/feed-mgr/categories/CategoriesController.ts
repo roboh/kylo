@@ -1,8 +1,7 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-import AccessControlService from '../../services/AccessControlService';
-const moduleName = require('feed-mgr/categories/module-name');
-
+import {AccessControlService} from '../../services/AccessControlService';
+const moduleName = require('./module-name');
 
 export class CategoriesController {
 
@@ -43,7 +42,13 @@ export class CategoriesController {
         );
 
         $scope.getIconColorStyle = (color: any) => {
-            return { 'fill': color };
+            let fillColor = (!color || color == '' ? '#90CAF9' : color);
+            return { 'fill': fillColor };
+        };
+
+        $scope.getColorStyle = (color: any) => {
+            let fillColor = (!color || color == '' ? '#90CAF9' : color);
+            return { 'background-color': fillColor };
         };
 
         // Register Add button
@@ -72,9 +77,10 @@ export class CategoriesController {
     };
 
 }
-angular.module(moduleName).component('categoriesController',  {
+const module = angular.module(moduleName).component('categoriesController',  {
     controller: CategoriesController,
     controllerAs: "vm",
-    templateUrl: 'js/feed-mgr/categories/categories.html'   
+    templateUrl: './categories.html'   
 });
 
+export default module;

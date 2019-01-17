@@ -1,11 +1,12 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
 import { moduleName } from "../../module-name";
-import { Common } from "../../../../common/CommonTypes";
 import LabelValue = Common.LabelValue;
 import { RegisterTemplateServiceFactory } from '../../../services/RegisterTemplateServiceFactory';
-import StateService from '../../../../services/StateService';
+import {StateService} from '../../../../services/StateService';
 import { EntityAccessControlService } from '../../../shared/entity-access-control/EntityAccessControlService';
+import '../../module-require';
+import {Common} from '../../../../../lib/common/CommonTypes';
 
 
 export class RegisterCompleteRegistrationController {
@@ -281,7 +282,7 @@ export class RegisterCompleteRegistrationController {
 
         this.$mdDialog.show({
             controller: 'IconPickerDialog',
-            templateUrl: 'js/common/icon-picker-dialog/icon-picker-dialog.html',
+            templateUrl: '../../../../common/icon-picker-dialog/icon-picker-dialog.html',
             parent: angular.element(document.body),
             clickOutsideToClose: false,
             fullscreen: true,
@@ -305,6 +306,7 @@ export class RegisterCompleteRegistrationController {
      */
     registerTemplate() {
 
+        console.log('register', this.registerTemplateService.model.changeComment);
         this.showRegistrationInProgressDialog();
         let successFn = (response: any) => {
             this.$mdDialog.hide();
@@ -381,7 +383,7 @@ export class RegisterCompleteRegistrationController {
             controller: ["$scope", "templateName", ($scope, templateName) => {
                 $scope.templateName = templateName;
             }],
-            templateUrl: 'js/feed-mgr/templates/template-stepper/register-template/register-template-inprogress-dialog.html',
+            templateUrl: './register-template-inprogress-dialog.html',
             parent: angular.element(document.body),
             clickOutsideToClose: false,
             fullscreen: true,
@@ -409,7 +411,7 @@ export class RegisterCompleteRegistrationController {
                         $mdDialog.cancel();
                     };
                 }],
-            templateUrl: 'js/feed-mgr/templates/template-stepper/register-template/register-template-error-dialog.html',
+            templateUrl: './register-template-error-dialog.html',
             parent: angular.element(document.body),
             clickOutsideToClose: true,
             fullscreen: true,
@@ -429,7 +431,7 @@ angular.module(moduleName).component("thinkbigRegisterCompleteRegistration", {
         stepIndex: '@'
     },
     controllerAs: 'vm',
-    templateUrl: 'js/feed-mgr/templates/template-stepper/register-template/register-template-step.html',
+    templateUrl: './register-template-step.html',
     controller: RegisterCompleteRegistrationController,
 
 });
@@ -445,8 +447,9 @@ export class RegisterTemplateCompleteController {
     }
 }
 
-angular.module(moduleName).component("registerTemplateCompleteController", {
-    templateUrl: 'js/feed-mgr/templates/template-stepper/register-template/register-template-complete.html',
+const module = angular.module(moduleName).component("registerTemplateCompleteController", {
+    templateUrl: './register-template-complete.html',
     controller: RegisterTemplateCompleteController,
     controllerAs: 'vm'
 });
+export default module;

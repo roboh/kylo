@@ -36,7 +36,7 @@ import com.thinkbiganalytics.search.rest.model.es.ElasticSearchRestSearchHit;
 import com.thinkbiganalytics.search.rest.model.es.ElasticSearchRestSearchResponse;
 
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -207,6 +207,7 @@ public class ElasticSearchRestSearchResultTransform {
         final String TBA_CATEGORY = "tba:category";
         final String TBA_TAGS = "tba:tags";
         final String USR_PROPERTIES = "usr:properties";
+        final String META_FEED_ID = "meta:feedId";
 
         final String TBA_SYSTEM_NAME_NEW_DESCRIPTION = "System name (Kylo)";
         final String JCR_TITLE_NEW_DESCRIPTION = "Title";
@@ -214,11 +215,18 @@ public class ElasticSearchRestSearchResultTransform {
         final String TBA_CATEGORY_NEW_DESCRIPTION = "Category";
         final String TBA_TAGS_NEW_DESCRIPTION = "Tags";
         final String USR_PROPERTIES_NEW_DESCRIPTION = "User properties";
+        final String META_FEED_ID_NEW_DESCRIPTION = "Feed ID";
 
         final String SPACE_STRING = " ";
 
         FeedMetadataSearchResultData feedMetadataSearchResultData = new FeedMetadataSearchResultData();
         List<Pair> highlightsList = new ArrayList<>();
+
+        if (!elasticSearchRestSearchHit.findValueForKeyInSourceWithDefault(META_FEED_ID, EMPTY_STRING).equals(EMPTY_STRING)) {
+            feedMetadataSearchResultData.setFeedId(
+                elasticSearchRestSearchHit.findValueForKeyInSourceWithDefault(META_FEED_ID, EMPTY_STRING).toString()
+            );
+        }
 
         if (!elasticSearchRestSearchHit.findValueForKeyInSourceWithDefault(TBA_SYSTEM_NAME, EMPTY_STRING).equals(EMPTY_STRING)) {
             feedMetadataSearchResultData.setFeedSystemName(
@@ -262,6 +270,10 @@ public class ElasticSearchRestSearchResultTransform {
             Boolean includeHighlight = false;
 
             switch (key) {
+                case META_FEED_ID:
+                    key = META_FEED_ID_NEW_DESCRIPTION;
+                    includeHighlight = true;
+                    break;
                 case JCR_TITLE:
                     key = JCR_TITLE_NEW_DESCRIPTION;
                     includeHighlight = true;
@@ -290,7 +302,7 @@ public class ElasticSearchRestSearchResultTransform {
             }
             if (includeHighlight) {
                 if (key.equals(USR_PROPERTIES_NEW_DESCRIPTION)) {
-                    highlightsList.add(new Pair(key, StringUtils.replace(highlightPair.getValue().toString(), KyloEsClient.USR_PROPERTIES_DELIMITER, USR_PROPERTIES_DELIMITER_FOR_REST_MODEL)));
+                    highlightsList.add(new Pair(key, getRenderPropertySearchResultHtmlAsString(highlightPair.getValue().toString())));
                 } else {
                     highlightsList.add(new Pair(key, highlightPair.getValue()));
                 }
@@ -370,7 +382,7 @@ public class ElasticSearchRestSearchResultTransform {
             }
             if (includeHighlight) {
                 if (key.equals(USR_PROPERTIES_NEW_DESCRIPTION)) {
-                    highlightsList.add(new Pair(key, StringUtils.replace(highlightPair.getValue().toString(), KyloEsClient.USR_PROPERTIES_DELIMITER, USR_PROPERTIES_DELIMITER_FOR_REST_MODEL)));
+                    highlightsList.add(new Pair(key, getRenderPropertySearchResultHtmlAsString(highlightPair.getValue().toString())));
                 } else {
                     highlightsList.add(new Pair(key, highlightPair.getValue()));
                 }
@@ -418,5 +430,79 @@ public class ElasticSearchRestSearchResultTransform {
         }
 
         return searchResultSummary;
+    }
+
+    public Pair getPropertyNameValuePair(String s) {
+        final String EQUAL_SIGN = "=";
+        final String IDENTIFIER = "'font-weight:bold'";
+        final int IDENTIFIER_LENGTH = IDENTIFIER.length();
+        int locationOfCorrectEqual = 0;
+
+        int equalCount = StringUtils.countMatches(s, EQUAL_SIGN);
+
+        if (equalCount == 0) {
+            return null;
+        }
+
+        int[] equalLocations = new int[equalCount];
+        int lastEqualFoundLocation = -1;
+        for (int i = 0; i < equalCount; i++) {
+            int currentEqualFoundLocation = StringUtils.indexOf(s, EQUAL_SIGN, lastEqualFoundLocation + 1);
+            if (currentEqualFoundLocation != -1) {
+                equalLocations[i] = currentEqualFoundLocation;
+                lastEqualFoundLocation = currentEqualFoundLocation;
+            } else {
+                break;
+            }
+        }
+
+        for (int i = 0; i < equalCount; i++) {
+            int currentEqualLocationToCheck = equalLocations[i];
+            if (s.length() >= currentEqualLocationToCheck + 1 + IDENTIFIER_LENGTH) {
+                String checkAfterCurrentEqual = s.substring(currentEqualLocationToCheck + 1, currentEqualLocationToCheck + 1 + IDENTIFIER_LENGTH);
+                if (!checkAfterCurrentEqual.equals(IDENTIFIER)) {
+                    locationOfCorrectEqual = currentEqualLocationToCheck;
+                    break;
+                }
+            }
+            locationOfCorrectEqual = currentEqualLocationToCheck;
+        }
+
+        String currentValueKey = StringUtils.substring(s, 0, locationOfCorrectEqual);
+        String currentValueValue = StringUtils.substring(s, locationOfCorrectEqual + 1, s.length());
+        return new Pair(currentValueKey, currentValueValue);
+    }
+
+    private String getRenderPropertySearchResultHtmlAsString(String originalValue) {
+        String[] valueAsArray =  StringUtils.split(originalValue, KyloEsClient.USR_PROPERTIES_DELIMITER);
+        Map<String, String> valueMap = new HashMap<>();
+        for (int i = 0; i < valueAsArray.length; i++) {
+            String currentValue = valueAsArray[i];
+            Pair nameValuePair = getPropertyNameValuePair(currentValue);
+            if (nameValuePair!=null) {
+                valueMap.put(nameValuePair.getKey(), nameValuePair.getValue().toString());
+            }
+        }
+
+        StringBuffer renderString = new StringBuffer();
+        renderString.append("<table style='border:1px solid black; border-collapse: collapse;'>" + "\n");
+        renderString.append("<tr>" + "\n");
+        renderString.append("<td style='border:1px solid black;padding: 3px;'><font style='font-style:italic'>name</font></td>" + "\n");
+        renderString.append("<td style='border:1px solid black;padding: 3px;'><font style='font-style:italic'>value</font></td>" + "\n");
+        renderString.append("</tr>" + "\n");
+
+        valueMap.forEach((k, v) -> {
+            renderString.append("<tr>" + "\n");
+            renderString.append("<td style='border:1px solid black;padding: 3px;'>" + "\n");
+            renderString.append(k);
+            renderString.append("</td style='border:1px solid black;padding: 3px;'>" + "\n");
+            renderString.append("<td style='border:1px solid black;padding: 3px;'>" + "\n");
+            renderString.append(v);
+            renderString.append("</td style='border:1px solid black;padding: 3px;'>" + "\n");
+            renderString.append("</tr>" + "\n");
+        });
+
+        renderString.append("</table>");
+        return renderString.toString();
     }
 }

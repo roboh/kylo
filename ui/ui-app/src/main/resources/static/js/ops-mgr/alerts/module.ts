@@ -18,7 +18,7 @@ class ModuleFactory  {
             url:'/alerts',
             views: {
                 'content': {
-                   // templateUrl: 'js/ops-mgr/alerts/alerts-table.html',
+                   // templateUrl: './alerts-table.html',
                     component:'alertsController',
                     //controllerAs:'vm'
                 }
@@ -27,7 +27,16 @@ class ModuleFactory  {
                 query: null
             },
             resolve: {
-                loadPage: this.lazyLoad()
+                loadMyCtrl: ['$ocLazyLoad', ($ocLazyLoad: any) => {
+                    return import(/* webpackChunkName: "opsmgr.alert-details.controller" */ './AlertDetailsController')
+                        .then(mod => {
+
+                            return $ocLazyLoad.load(mod.default)
+                        })
+                        .catch(err => {
+                            throw new Error("Failed to load AlertDetailsController, " + err);
+                        });
+                }]
             },
             data:{
                 displayName:'Alerts',
@@ -38,7 +47,7 @@ class ModuleFactory  {
             url:"/alert-details/{alertId}",
             views: {
                 'content': {
-                    //templateUrl: 'js/ops-mgr/alerts/alert-details.html',
+                    //templateUrl: './alert-details.html',
                     component:'alertDetailsController',
                     //controllerAs:'vm'
                 }
@@ -47,7 +56,17 @@ class ModuleFactory  {
                 alertId: null
             },
             resolve: {
-                loadMyCtrl: this.lazyLoadController(['ops-mgr/alerts/AlertDetailsController'])
+                // loadMyCtrl: this.lazyLoadController(['./AlertDetailsController'])
+                loadMyCtrl: ['$ocLazyLoad', ($ocLazyLoad: any) => {
+                    return import(/* webpackChunkName: "opsmgr.alert-details.controller" */ './AlertDetailsController')
+                        .then(mod => {
+
+                            return $ocLazyLoad.load(mod.default)
+                        })
+                        .catch(err => {
+                            throw new Error("Failed to load AlertDetailsController, " + err);
+                        });
+                }]
             },
             data:{
                 displayName:'Alert Details',
@@ -56,14 +75,7 @@ class ModuleFactory  {
             }
         });
     }  
-
-    lazyLoadController(path:any){
-        return lazyLoadUtil.lazyLoadController(path,["ops-mgr/alerts/module-require"]);
-    }    
-    lazyLoad(){
-        return lazyLoadUtil.lazyLoad(['ops-mgr/alerts/module-require']);
-    }
-} 
+}
 
 const module = new ModuleFactory();
 export default module;

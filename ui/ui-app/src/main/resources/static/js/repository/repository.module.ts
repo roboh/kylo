@@ -1,5 +1,5 @@
 import {CommonModule} from "@angular/common";
-import {NgModule} from "@angular/core";
+import {Injector, NgModule} from "@angular/core";
 import {FlexLayoutModule} from "@angular/flex-layout";
 import {MatCardModule} from "@angular/material/card";
 import {MatDividerModule} from "@angular/material/divider";
@@ -14,6 +14,7 @@ import {CovalentSearchModule} from "@covalent/core/search";
 import {UIRouterModule} from "@uirouter/angular";
 
 import {KyloCommonModule} from "../common/common.module";
+import {KyloFeedManagerModule} from "../feed-mgr/feed-mgr.module";
 import {RepositoryComponent} from "./repository.component";
 import {repositoryStates} from "./repository.states";
 import {ListTemplatesComponent} from "./list/list.component";
@@ -30,44 +31,84 @@ import {MatProgressSpinnerModule} from "@angular/material/progress-spinner";
 import {MatMenuModule} from "@angular/material/menu";
 import {MatProgressBarModule} from "@angular/material/progress-bar";
 import {TemplatePublishDialog} from "./dialog/template-publish-dialog";
+import {MatRadioModule} from "@angular/material/radio";
+import {ImportTemplateComponent, ImportTemplateDirective} from "./ng5-import-template.component";
+import {CovalentCommonModule} from "@covalent/core/common";
+import {MatPaginatorModule} from "@angular/material/paginator";
+import {MatSortModule} from "@angular/material/sort";
+import {MatInputModule} from "@angular/material/input";
+import {CovalentNotificationsModule} from "@covalent/core/notifications";
+import {CovalentExpansionPanelModule} from "@covalent/core/expansion-panel";
+import {TemplateUpdatesDialog} from "./dialog/template-updates-dialog";
+import {MatExpansionModule} from "@angular/material/expansion";
+import {CovalentVirtualScrollModule} from "@covalent/core/virtual-scroll";
+import {MatChipsModule} from "@angular/material/chips";
+import {TemplateChangeCommentsComponent} from "./template-change-comments.component";
+import {MatIconModule} from "@angular/material/icon";
+
+const moduleName: string = require("../feed-mgr/templates/module-name");
 
 @NgModule({
     declarations: [
         ListTemplatesComponent,
         RepositoryComponent,
         TemplateInfoComponent,
-        TemplatePublishDialog
+        TemplateChangeCommentsComponent,
+        TemplatePublishDialog,
+        TemplateUpdatesDialog,
+        ImportTemplateComponent,
+        ImportTemplateDirective
     ],
     imports: [
-        FormsModule,
+        CdkTableModule,
         CommonModule,
+        CovalentCommonModule,
         CovalentDataTableModule,
         CovalentDialogsModule,
+        CovalentExpansionPanelModule,
         CovalentLayoutModule,
         CovalentLoadingModule,
-        CovalentSearchModule,
+        CovalentNotificationsModule,
         CovalentPagingModule,
+        CovalentSearchModule,
+        CovalentVirtualScrollModule,
         FlexLayoutModule,
+        FormsModule,
         KyloCommonModule,
+        KyloFeedManagerModule,
+        MatButtonModule,
         MatCardModule,
+        MatCheckboxModule,
+        MatChipsModule,
         MatDividerModule,
+        MatExpansionModule,
+        MatIconModule,
+        MatInputModule,
         MatListModule,
+        MatMenuModule,
+        MatPaginatorModule,
+        MatProgressBarModule,
+        MatProgressSpinnerModule,
+        MatRadioModule,
+        MatSelectModule,
+        MatSortModule,
+        MatTableModule,
         MatTabsModule,
         MatToolbarModule,
-        MatCheckboxModule,
-        MatSelectModule,
-        MatButtonModule,
-        MatTableModule,
-        MatProgressSpinnerModule,
-        CdkTableModule,
-        MatMenuModule,
-        MatProgressBarModule,
         UIRouterModule.forChild({states: repositoryStates})
     ],
     providers:[
         TemplateService
     ],
-    entryComponents: [TemplatePublishDialog]
+    entryComponents: [TemplatePublishDialog, TemplateUpdatesDialog]
 })
 export class RepositoryModule {
+
+    constructor(injector: Injector) {
+        // Lazy load AngularJS module and entry component
+        require("../feed-mgr/templates/module");
+        injector.get("$ocLazyLoad").inject(moduleName);
+        require("../feed-mgr/templates/module-require");
+        require("../feed-mgr/templates/import-template/ImportTemplateController");
+    }
 }

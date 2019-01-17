@@ -21,6 +21,8 @@ import {CovalentPagingModule} from '@covalent/core/paging';
 import {CommonModule} from '@angular/common';
 import {BrowserModule} from '../api/browser.module';
 import {CovalentLoadingModule} from '@covalent/core/loading';
+import {MatToolbarModule} from "@angular/material/toolbar";
+import {MatIconModule} from "@angular/material/icon";
 
 @NgModule({
     declarations: [
@@ -28,6 +30,9 @@ import {CovalentLoadingModule} from '@covalent/core/loading';
     ],
     entryComponents: [
         TablesComponent,
+    ],
+    exports:[
+        TablesComponent
     ],
     imports: [
         BrowserModule,
@@ -47,11 +52,22 @@ import {CovalentLoadingModule} from '@covalent/core/loading';
         MatDividerModule,
         MatListModule,
         MatProgressBarModule,
+        MatToolbarModule,
         MatSelectModule,
         MatCheckboxModule,
         MatDialogModule,
-        UIRouterModule.forChild({states: tablesStates})
+        MatIconModule,
+        UIRouterModule
+
     ]
 })
 export class TablesModule {
+}
+@NgModule({
+    imports: [
+        TablesModule,
+        UIRouterModule.forChild({states: tablesStates})
+    ]
+})
+export class TablesRouterModule {
 }

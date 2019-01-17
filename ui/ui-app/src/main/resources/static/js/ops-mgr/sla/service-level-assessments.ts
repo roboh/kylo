@@ -3,10 +3,10 @@ import {moduleName} from "./module-name";
 import * as _ from 'underscore';
 import OpsManagerRestUrlService from "../services/OpsManagerRestUrlService";
 import IconService from "../services/IconStatusService";
-import TabService from "../services/TabService";
-import AccessControlService from "../../services/AccessControlService";
+import {TabService} from "../../services/tab.service";
+import {AccessControlService} from "../../services/AccessControlService";
 import { DefaultTableOptionsService } from "../../services/TableOptionsService";
-import BroadcastService from "../../services/broadcast-service";
+import {BroadcastService} from "../../services/broadcast-service";
 import { DefaultPaginationDataService } from "../../services/PaginationDataService";
 
 export class controller implements ng.IComponentController{
@@ -265,11 +265,9 @@ constructor(private $scope: angular.IScope,
             this.loaded = true;
         }
 
-
-
 }
 
-angular.module(moduleName).component("kyloServiceLevelAssessments", {
+const module = angular.module(moduleName).component("kyloServiceLevelAssessments", {
     controller: controller,
     bindings: {
         cardTitle: "@",
@@ -277,5 +275,6 @@ angular.module(moduleName).component("kyloServiceLevelAssessments", {
         filter:'@'
     },
     controllerAs: "vm",
-    templateUrl: "js/ops-mgr/sla/service-level-assessments-template.html"
+    templateUrl: "./service-level-assessments-template.html"
 });
+export default module;

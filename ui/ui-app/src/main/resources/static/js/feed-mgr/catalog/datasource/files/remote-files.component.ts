@@ -2,22 +2,35 @@ import {RemoteFile, RemoteFileDescriptor} from './remote-file';
 import {BrowserComponent} from '../api/browser.component';
 import {BrowserObject} from '../../api/models/browser-object';
 import {Node} from '../../api/models/node';
+import {Component} from "@angular/core";
 
-
+@Component({
+    selector: "catalog-file-browser",
+    styleUrls: ["../api/browser.component.scss"],
+    templateUrl: "../api/browser.component.html"
+})
 export class RemoteFilesComponent extends BrowserComponent {
+
+
 
     init(): void {
         if (this.params.path === undefined) { //e.g. when navigating from Catalog into Files
-            this.params.path = this.datasource.template.paths[0];
-            this.browseTo(this.params, "replace");
-        } else {
-            this.initData();
+            this.params.path = (this.datasource.template && this.datasource.template.paths) ? this.datasource.template.paths[0] : this.datasource.connector.template.paths[0];
+            if(this.useRouterStates) {
+                this.browseTo(this.params, "replace");
+            }
+            else {
+                this.initData();
+            }
+        }
+        else {
+            this.initData(true);
         }
     }
 
 
     createRootNode(): Node {
-        const rootPath = this.datasource.template.paths[0];
+        const rootPath = (this.datasource.template && this.datasource.template.paths) ? this.datasource.template.paths[0] : this.datasource.connector.template.paths[0];
         const root = new Node(rootPath);
         root.setBrowserObject(new RemoteFile(rootPath, rootPath, false, 0, new Date()));
         return root;
@@ -28,7 +41,7 @@ export class RemoteFilesComponent extends BrowserComponent {
     }
 
     getSortByColumnName() {
-        return this.columns[1].name;
+        return this.columns[2].name;
     }
 
     getStateName(): string {
@@ -50,7 +63,7 @@ export class RemoteFilesComponent extends BrowserComponent {
     createParentNodeParams(node: Node): any {
         const pathNodes = node.getPathNodes();
         const root = pathNodes[0];
-        if (RemoteFilesComponent.isAzure(new URL(root.getName()))) {
+        if (RemoteFilesComponent.isAzure(new URL(root.getName())) || RemoteFilesComponent.isS3(new URL(root.getName()))) {
             return {path: (<RemoteFile>node.getBrowserObject()).path};
         } else {
             return {path: pathNodes.map(n => n.getName()).join("/")};
@@ -114,15 +127,18 @@ export class RemoteFilesComponent extends BrowserComponent {
             //for all others types of file protocols
             const rootPath = rootUrl.toString(); //normalise root url
             const path = pathUrl.toString(); //normalise path url
-            let relativePath = path.substring(rootPath.length, path.length);
+            let pathPartStart = (rootPath.endsWith("///") ? rootPath.length -1 : rootPath.length);
+            let relativePath = path.substring(pathPartStart, path.length);
             if (relativePath.length > 0) {
                 let node: Node = root;
                 const splits: string[] = relativePath.split("/");
                 const paths = splits.filter(p => p.length > 0);
-                for (let path of paths) {
+                for(var i=0; i<paths.length; i++){
+                    let path = paths[i];
                     let child = node.getChild(path);
                     if (child === undefined) {
                         child = new Node(path);
+                        child.setBrowserObject(RemoteFilesComponent.createTempPlaceholder(path, path));
                         node.addChild(child);
                     }
                     node = child;
@@ -147,7 +163,10 @@ export class RemoteFilesComponent extends BrowserComponent {
     }
 
     private static isAzure(url: URL) {
-        return url.protocol === "wasb:";
+        return url.protocol === "wasb:" || url.protocol === "wasbs:";
+    }
+    private static isS3(url: URL) {
+        return url.protocol === "s3:" || url.protocol === "s3a:";
     }
 
 }

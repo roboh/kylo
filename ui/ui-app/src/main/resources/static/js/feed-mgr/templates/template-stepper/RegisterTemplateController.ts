@@ -2,11 +2,12 @@ import * as angular from 'angular';
 import * as _ from "underscore";
 import { moduleName } from "../module-name";
 import { Transition } from '@uirouter/core';
-import StateService from '../../../services/StateService';
-import AccessControlService from '../../../services/AccessControlService';
-import BroadcastService from '../../../services/broadcast-service';
+import {StateService} from '../../../services/StateService';
+import {AccessControlService} from '../../../services/AccessControlService';
+import {BroadcastService} from '../../../services/broadcast-service';
 import { RegisterTemplateServiceFactory } from '../../services/RegisterTemplateServiceFactory';
-
+import '../../../../assets/images/75_arrow.svg'
+import '../module-require';
 
 export class RegisterTemplateController {
 
@@ -104,11 +105,12 @@ export class RegisterTemplateController {
 
 }
 
-angular.module(moduleName).component('registerTemplateController', {
+const module = angular.module(moduleName).component('registerTemplateController', {
     bindings: {
         $transition$: '<'
     },
-    templateUrl: 'js/feed-mgr/templates/template-stepper/register-template.html',
+    templateUrl: './register-template.html',
     controller: RegisterTemplateController,
     controllerAs: 'vm'
 });
+export default module;

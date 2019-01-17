@@ -1,15 +1,15 @@
 import * as angular from 'angular';
 import * as _ from 'underscore';
 import UserService from "../services/UserService";
-import AddButtonService from  "../../services/AddButtonService";
+import {AddButtonService} from  "../../services/AddButtonService";
 import {DefaultPaginationDataService} from  "../../services/PaginationDataService";
-import StateService from  "../../services/StateService";
+import {StateService} from  "../../services/StateService";
 import {DefaultTableOptionsService} from  "../../services/TableOptionsService";
 import "../module";
 import "../module-require";
 import {moduleName} from "../module-name";
 const PAGE_NAME:string = "users";
-export default class UsersTableController implements ng.IComponentController {
+export class UsersTableController implements ng.IComponentController {
     /**
      * Page title.
      * @type {string}
@@ -146,7 +146,7 @@ export default class UsersTableController implements ng.IComponentController {
      * @param user the user
      */
     userDetails (user:any) {
-        this.StateService.Auth().navigateToUserDetails(user.systemName);
+        this.StateService.Auth.navigateToUserDetails(user.systemName);
     };
     static readonly $inject = ["$scope",
                                 "AddButtonService",
@@ -171,7 +171,7 @@ export default class UsersTableController implements ng.IComponentController {
 
         // Register Add button
         this.AddButtonService.registerAddButton('users', () => {
-            this.StateService.Auth().navigateToUserDetails();
+            this.StateService.Auth.navigateToUserDetails();
         });
 
         // Get the list of users and groups
@@ -187,9 +187,10 @@ export default class UsersTableController implements ng.IComponentController {
         });
     }
 }
-angular.module(moduleName)
+const module = angular.module(moduleName)
 .component("usersTableController", {
         controller: UsersTableController,
         controllerAs: "vm",
-        templateUrl: "js/auth/users/users-table.html"
+        templateUrl: "./users-table.html"
     });
+export default module;

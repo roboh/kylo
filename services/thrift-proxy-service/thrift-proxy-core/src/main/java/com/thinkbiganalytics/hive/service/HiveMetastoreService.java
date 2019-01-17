@@ -28,7 +28,6 @@ import com.thinkbiganalytics.discovery.schema.DatabaseMetadata;
 import com.thinkbiganalytics.discovery.schema.Field;
 import com.thinkbiganalytics.discovery.schema.JdbcCatalog;
 import com.thinkbiganalytics.discovery.schema.JdbcSchema;
-import com.thinkbiganalytics.discovery.schema.JdbcSchemaParser;
 import com.thinkbiganalytics.discovery.schema.JdbcTable;
 import com.thinkbiganalytics.discovery.schema.TableSchema;
 import com.thinkbiganalytics.jdbc.util.DatabaseType;
@@ -63,7 +62,7 @@ import javax.sql.DataSource;
 /**
  */
 @Service("hiveMetastoreService")
-public class HiveMetastoreService implements JdbcSchemaParser {
+public class HiveMetastoreService {
 
     private static final Logger log = LoggerFactory.getLogger(HiveMetastoreService.class);
 
@@ -102,13 +101,11 @@ public class HiveMetastoreService implements JdbcSchemaParser {
     }
 
     @Nonnull
-    @Override
     public List<JdbcCatalog> listCatalogs(@Nullable final String pattern, @Nullable final Pageable pageable) {
         return Collections.emptyList();
     }
 
     @Nonnull
-    @Override
     public List<JdbcSchema> listSchemas(@Nullable final String catalog, @Nullable final String pattern, @Nullable final Pageable pageable) {
         return hiveService.getSchemaNames().stream()
             .map(DefaultJdbcSchema::new)
@@ -116,7 +113,6 @@ public class HiveMetastoreService implements JdbcSchemaParser {
     }
 
     @Nonnull
-    @Override
     public List<JdbcTable> listTables(@Nullable final String catalog, @Nullable final String schema, @Nullable final String pattern, @Nullable final Pageable pageable) {
         String query = "SELECT d.NAME as \"DATABASE_NAME\", t.TBL_NAME, t.TBL_TYPE, p.PARAM_VALUE"
                        + " FROM TBLS t"
@@ -217,7 +213,7 @@ public class HiveMetastoreService implements JdbcSchemaParser {
 
     public List<TableSchema> getTableSchemas() throws DataAccessException {
 
-        String query = "SELECT d.NAME as \"DATABASE_NAME\", t.TBL_NAME, c.COLUMN_NAME c.TYPE_NAME "
+        String query = "SELECT d.NAME as \"DATABASE_NAME\", t.TBL_NAME, c.COLUMN_NAME, c.TYPE_NAME "
                        + "FROM COLUMNS_V2 c "
                        + "JOIN  SDS s on s.CD_ID = c.CD_ID "
                        + "JOIN  TBLS t ON s.SD_ID = t.SD_ID "
@@ -261,6 +257,57 @@ public class HiveMetastoreService implements JdbcSchemaParser {
                 field.setDerivedDataType(columnType);
                 schema.getFields().add(field);
                 return schema;
+            }
+        });
+
+        return metadata;
+
+    }
+
+    public TableSchema getTable(String schema, String table) throws DataAccessException {
+
+        // Must use JDBC metadata for user impersonation
+        if (userImpersonationEnabled) {
+            return hiveService.getTableSchema(schema, table);
+        }
+
+        String query = "SELECT d.NAME as \"DATABASE_NAME\", t.TBL_NAME, c.COLUMN_NAME, c.TYPE_NAME "
+                       + "FROM COLUMNS_V2 c "
+                       + "JOIN  SDS s on s.CD_ID = c.CD_ID "
+                       + "JOIN  TBLS t ON s.SD_ID = t.SD_ID "
+                       + "JOIN  DBS d on d.DB_ID = t.DB_ID "
+                       + "WHERE t.TBL_NAME='" + table + "' and d.NAME='" + schema + "' "
+                       + "ORDER BY d.NAME, t.TBL_NAME, c.INTEGER_IDX";
+        if (DatabaseType.POSTGRES.equals(getMetastoreDatabaseType())) {
+            query = "SELECT d.\"NAME\" as \"DATABASE_NAME\", t.\"TBL_NAME\", c.\"COLUMN_NAME\",c.\"TYPE_NAME\" "
+                    + "FROM \"COLUMNS_V2\" c "
+                    + "JOIN  \"SDS\" s on s.\"CD_ID\" = c.\"CD_ID\" "
+                    + "JOIN  \"TBLS\" t ON s.\"SD_ID\" = t.\"SD_ID\" "
+                    + "JOIN  \"DBS\" d on d.\"DB_ID\" = t.\"DB_ID\" "
+                    + "WHERE t.\"TBL_NAME\"='" + table + "' and d.\"NAME\"='" + schema + "' "
+                    + "ORDER BY d.\"NAME\", t.\"TBL_NAME\", c.\"INTEGER_IDX\"";
+
+
+        }
+        final DefaultTableSchema metadata = new DefaultTableSchema();
+
+        hiveMetatoreJdbcTemplate.query(query, new RowMapper<Object>() {
+            @Override
+            public TableSchema mapRow(ResultSet rs, int i) throws SQLException {
+                String dbName = rs.getString("DATABASE_NAME");
+                String columnName = rs.getString("COLUMN_NAME");
+                String tableName = rs.getString("TBL_NAME");
+                String columnType = rs.getString("TYPE_NAME");
+
+                metadata.setName(tableName);
+                metadata.setSchemaName(dbName);
+
+                DefaultField field = new DefaultField();
+                field.setName(columnName);
+                field.setNativeDataType(columnType);
+                field.setDerivedDataType(columnType);
+                metadata.getFields().add(field);
+                return metadata;
             }
         });
 

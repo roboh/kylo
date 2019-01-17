@@ -3,6 +3,8 @@ import {moduleName} from "../module-name";
 import "@uirouter/angularjs";
 import * as _ from 'underscore';
 import {StateService, Transition} from "@uirouter/core";
+import './breadcrumbs.css';
+
 /**
  * Config
  */
@@ -55,7 +57,7 @@ export default class RouterBreadcrumbs implements ng.IComponentController {
     }
 
     getDisplayName(state: any) {
-        return state.data.displayName || state.name;
+        return state.data.displayName ; //|| state.name;
     }
 
     isBreadcrumbRoot(state: any){
@@ -173,5 +175,5 @@ angular.module(moduleName).component("uiRouterBreadcrumbs",{
     },
     templateUrl: ($element: any, $attrs: any)=> {
         return $attrs.templateUrl || templateUrl;
-    }
+    },
 });

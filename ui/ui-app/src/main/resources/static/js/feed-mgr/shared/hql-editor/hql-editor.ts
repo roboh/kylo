@@ -2,7 +2,7 @@ import * as angular from 'angular';
 import * as _ from "underscore";
 import "pascalprecht.translate";
 // const CodeMirror = require('angular-ui-codemirror');
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 declare const CodeMirror: any;
 
@@ -156,7 +156,7 @@ export class HqlEditorController {
         this.$mdDialog.show({
             controller: 'HqlFullScreenEditorController',
             controllerAs: 'vm',
-            templateUrl: 'js/feed-mgr/shared/hql-editor/hql-editor-fullscreen.html',
+            templateUrl: './hql-editor-fullscreen.html',
             parent: angular.element(document.body),
             clickOutsideToClose: false,
             fullscreen: true,
@@ -222,7 +222,7 @@ angular.module(moduleName).component('thinkbigHqlEditor', {
         tableId: '@',
     },
     controllerAs: 'vm',
-    templateUrl: 'js/feed-mgr/shared/hql-editor/hql-editor.html',
+    templateUrl: './hql-editor.html',
     controller: HqlEditorController,
     require: {
         ngModel: "?ngModel"

@@ -32,7 +32,7 @@ ngOnInit() {
             labelSunbeamLayout: false,
             "margin":{"top":10,"right":10,"bottom":10,"left":10},
             donut:true,
-            donutRatio:0.65,
+            donutRatio:0.62,
             showLegend:false,
             refreshDataOnly: false,
             valueFormat: (d: any)=>{
@@ -40,10 +40,10 @@ ngOnInit() {
             },
             color:(d: any)=>{
                 if(d.key == 'Healthy'){
-                    return '#009933';
+                    return '#388e3c';
                 }
                 else if( d.key== 'Unhealthy'){
-                    return '#FF0000';
+                    return '#b71c1c';
                 }
             },
             pie: {
@@ -115,7 +115,7 @@ constructor(private $scope: IScope,
                                 $mdDialog.cancel();
                             };
                         }],
-                        templateUrl: 'js/ops-mgr/overview/data-confidence-indicator/data-confidence-details-dialog.html',
+                        templateUrl: './data-confidence-details-dialog.html',
                         parent: angular.element(document.body),
                         clickOutsideToClose: true,
                         fullscreen: true,
@@ -187,5 +187,5 @@ angular.module(moduleName).component('tbaDataConfidenceIndicator',{
         panelTitle: "@"
     },
     controllerAs: "vm",
-    templateUrl: "js/ops-mgr/overview/data-confidence-indicator/data-confidence-indicator-template.html"
+    templateUrl: "./data-confidence-indicator-template.html"
 });

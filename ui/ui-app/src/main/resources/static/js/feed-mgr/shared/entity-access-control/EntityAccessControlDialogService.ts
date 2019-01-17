@@ -2,7 +2,7 @@ import * as angular from 'angular';
 import * as _ from "underscore";
 import { EntityAccessControlService } from './EntityAccessControlService';
 import { FeedService } from '../../services/FeedService';
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";
 
 export class EntityAccessControlDialogService {
     static readonly $inject = ["$mdDialog"];
@@ -14,7 +14,7 @@ export class EntityAccessControlDialogService {
         var callbackEvents = { onSave: onSave, onCancel: onCancel };
         return this.$mdDialog.show({
             controller: 'EntityAccessControlDialogController',
-            templateUrl: 'js/feed-mgr/shared/entity-access-control/entity-access-control-dialog.html',
+            templateUrl: './entity-access-control-dialog.html',
             parent: angular.element(document.body),
             clickOutsideToClose: false,
             fullscreen: true,

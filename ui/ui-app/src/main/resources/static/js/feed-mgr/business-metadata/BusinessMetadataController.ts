@@ -1,7 +1,8 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
 import { moduleName } from "./module-name";
-import AccessControlService from '../../services/AccessControlService';
+import {AccessControlService} from '../../services/AccessControlService';
+import './module-require';
 
 export class BusinessMetadataController implements ng.IComponentController {
     /**
@@ -127,8 +128,9 @@ export class BusinessMetadataController implements ng.IComponentController {
 
 }
 // Register the controller
-angular.module(moduleName).component('businessMetadataController', {
-    templateUrl: 'js/feed-mgr/business-metadata/business-metadata.html',
+const module = angular.module(moduleName).component('businessMetadataController', {
+    templateUrl: './business-metadata.html',
     controller: BusinessMetadataController,
     controllerAs: 'vm'
 });
+export default module;

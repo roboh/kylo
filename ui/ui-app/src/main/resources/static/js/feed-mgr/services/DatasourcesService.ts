@@ -15,19 +15,18 @@
  */
 import * as angular from 'angular';
 import * as _ from "underscore";
-import { EntityAccessControlService } from '../shared/entity-access-control/EntityAccessControlService';
-const moduleName = require('feed-mgr/module-name');
+import {EntityAccessControlService} from '../shared/entity-access-control/EntityAccessControlService';
+import "../module";
+import {RestUrlConstants} from "./RestUrlConstants";
+import {Observable} from "rxjs/Observable";
+import 'rxjs/add/observable/fromPromise';
+import 'rxjs/add/operator/toPromise';
+import 'rxjs/add/observable/of';
 
 /**
  * Interacts with the Data Sources REST API.
  * @constructor
  */
-
-//export class DatasourcesService {
-    // DatasourcesServiceClass();
-//}
-
-// export class DatasourcesService {
  export  class DatasourcesService {
        /**
          * Type name for JDBC data sources.
@@ -43,7 +42,7 @@ const moduleName = require('feed-mgr/module-name');
 
         ICON = "grid_on";
         ICON_COLOR = "orange";
-        HIVE_DATASOURCE = {id: 'HIVE', name: "Hive", isHive: true, icon: this.ICON, iconColor: this.ICON_COLOR};
+        HIVE_DATASOURCE:any = {id: 'HIVE', name: "Hive", isHive: true, icon: this.ICON, iconColor: this.ICON_COLOR};
 
         getHiveDatasource() {
                 return this.HIVE_DATASOURCE;
@@ -55,10 +54,9 @@ const moduleName = require('feed-mgr/module-name');
             }
         }
 
-        static readonly $inject = ["$http", "$q", "RestUrlService","EntityAccessControlService"];
-        constructor(private $http:any, 
-                    private $q:any, 
-                    private RestUrlService:any, 
+        static readonly $inject = ["$http", "$q", "EntityAccessControlService"];
+        constructor(private $http:angular.IHttpService, 
+                    private $q:angular.IQService,
                     private entityAccessControlService:EntityAccessControlService) {
       //  angular.extend(DatasourcesService.prototype, {
             
@@ -71,7 +69,7 @@ const moduleName = require('feed-mgr/module-name');
              * data sources supporting icons
              * @returns {string} default icon name
              */
-            defaultIconName= () =>{
+            defaultIconName(){
                 return this.ICON;
             }
 
@@ -80,7 +78,7 @@ const moduleName = require('feed-mgr/module-name');
              * data sources supporting icons
              * @returns {string} default icon color
              */
-            defaultIconColor= () => {
+            defaultIconColor(){
                 return this.ICON_COLOR;
             }
 
@@ -89,10 +87,10 @@ const moduleName = require('feed-mgr/module-name');
              * @param {string} id the data source id
              * @returns {Promise} for when the data source is deleted
              */
-            deleteById= (id:any) => {
+            deleteById(id:any) {
                 return this.$http({
                     method: "DELETE",
-                    url: this.RestUrlService.GET_DATASOURCES_URL + "/" + encodeURIComponent(id)
+                    url: RestUrlConstants.GET_DATASOURCES_URL + "/" + encodeURIComponent(id)
                 });
             }
 
@@ -103,7 +101,7 @@ const moduleName = require('feed-mgr/module-name');
              * @param {Array.<JdbcDatasource>} array the data sources to filter
              * @return {Array.<JdbcDatasource>} the array of matching data sources
              */
-            filterArrayByIds= (ids:any, array:any) => {
+            filterArrayByIds (ids:any, array:any) {
                 var idList = angular.isArray(ids) ? ids : [ids];
                 return array.filter((datasource:any) => {
                     return (idList.indexOf(datasource.id) > -1);
@@ -114,10 +112,10 @@ const moduleName = require('feed-mgr/module-name');
              * Finds all user data sources.
              * @returns {Promise} with the list of data sources
              */
-            findAll= () => {
-                return this.$http.get(this.RestUrlService.GET_DATASOURCES_URL, {params: {type: this.USER_TYPE}})
+            findAll() {
+                return this.$http.get(RestUrlConstants.GET_DATASOURCES_URL, {params: {type: this.USER_TYPE}})
                     .then((response:any) => {
-                        _.each(response.data, this.ensureDefaultIcon);
+                        _.each(response.data, this.ensureDefaultIcon.bind(this));
                         return response.data;
                     });
             }
@@ -127,19 +125,19 @@ const moduleName = require('feed-mgr/module-name');
              * @param {string} id the data source id
              * @returns {Promise} with the data source
              */
-            findById= (id:any) => {
+            findById(id:any) : any {
                 if (this.HIVE_DATASOURCE.id === id) {
-                    return Promise.resolve(this.HIVE_DATASOURCE);
+                    return Observable.of(this.HIVE_DATASOURCE).toPromise();
                 }
-                return this.$http.get(this.RestUrlService.GET_DATASOURCES_URL + "/" + id)
+                return this.$http.get(RestUrlConstants.GET_DATASOURCES_URL + "/" + id)
                     .then((response:any) => {
                         this.ensureDefaultIcon(response.data);
                         return response.data;
                     });
             }
 
-            findControllerServiceReferences= (controllerServiceId:any) => {
-                return this.$http.get(this.RestUrlService.GET_NIFI_CONTROLLER_SERVICE_REFERENCES_URL(controllerServiceId))
+            findControllerServiceReferences (controllerServiceId:any) {
+                return this.$http.get(RestUrlConstants.GET_NIFI_CONTROLLER_SERVICE_REFERENCES_URL(controllerServiceId))
                     .then((response:any) => {
                         return response.data;
                     });
@@ -151,13 +149,13 @@ const moduleName = require('feed-mgr/module-name');
              * @param {string} table the table name
              * @param {string} [opt_schema] the schema name
              */
-            getTableSchema= (id:any, table:any, opt_schema:any) => {
+            getTableSchema (id:any, table:any, opt_schema:any) {
                 var options:any = {params: {}};
                 if (angular.isString(opt_schema)) {
                     options.params.schema = opt_schema;
                 }
 
-                return this.$http.get(this.RestUrlService.GET_DATASOURCES_URL + "/" + id + "/tables/" + table, options)
+                return this.$http.get(RestUrlConstants.GET_DATASOURCES_URL + "/" + id + "/tables/" + table, options)
                     .then((response:any) => {
                         return response.data;
                     });
@@ -168,13 +166,13 @@ const moduleName = require('feed-mgr/module-name');
              * @param {string} id the data source id
              * @param {string} [opt_query] the table name query
              */
-            listTables= (id:any, opt_query:any) => {
+            listTables (id:any, opt_query:any) {
                 var options:any = {params: {}};
                 if (angular.isString(opt_query) && opt_query.length > 0) {
                     options.params.tableName = "%" + opt_query + "%";
                 }
 
-                return this.$http.get(this.RestUrlService.GET_DATASOURCES_URL + "/" + id + "/tables", options)
+                return this.$http.get(RestUrlConstants.GET_DATASOURCES_URL + "/" + id + "/tables", options)
                     .then((response:any) => {
                         // Get the list of tables
                         var tables = [];
@@ -200,8 +198,8 @@ const moduleName = require('feed-mgr/module-name');
                        });
             }
 
-            query= (datasourceId:any, sql:any) => {
-                return this.$http.get(this.RestUrlService.GET_DATASOURCES_URL + "/" + datasourceId + "/query?query=" + sql)
+            query(datasourceId:any, sql:any) {
+                return this.$http.get(RestUrlConstants.GET_DATASOURCES_URL + "/" + datasourceId + "/query?query=" + sql)
                     .then((response:any) => {
                         return response;
                     }).catch((e:any) => {
@@ -209,8 +207,8 @@ const moduleName = require('feed-mgr/module-name');
                     });
             }
 
-            preview= (datasourceId:any, schema:string, table:string, limit:number) => {
-                return this.$http.post(this.RestUrlService.PREVIEW_DATASOURCE_URL(datasourceId, schema, table, limit))
+            preview(datasourceId:any, schema:string, table:string, limit:number) {
+                return this.$http.post(RestUrlConstants.PREVIEW_DATASOURCE_URL(datasourceId, schema, table, limit),null)
                     .then((response:any) => {
                         return response;
                     }).catch((e:any) => {
@@ -218,8 +216,8 @@ const moduleName = require('feed-mgr/module-name');
                     });
             }
 
-           getPreviewSql= (datasourceId:any, schema:string, table:string, limit:number) => {
-                return this.$http.get(this.RestUrlService.PREVIEW_DATASOURCE_URL(datasourceId, schema, table, limit))
+           getPreviewSql(datasourceId:any, schema:string, table:string, limit:number) {
+                return this.$http.get(RestUrlConstants.PREVIEW_DATASOURCE_URL(datasourceId, schema, table, limit))
                     .then((response:any) => {
                         return response.data;
                     }).catch((e:any) => {
@@ -227,16 +225,16 @@ const moduleName = require('feed-mgr/module-name');
                     });
             }
 
-            getTablesAndColumns= (datasourceId:any, schema:any) => {
+            getTablesAndColumns(datasourceId:any, schema:any){
                 var params = {schema: schema};
-                return this.$http.get(this.RestUrlService.GET_DATASOURCES_URL + "/" + datasourceId + "/table-columns", {params: params});
+                return this.$http.get(RestUrlConstants.GET_DATASOURCES_URL + "/" + datasourceId + "/table-columns", {params: params});
             }
 
             /**
              * Creates a new JDBC data source.
              * @returns {JdbcDatasource} the JDBC data source
              */
-            newJdbcDatasource= () => {
+            newJdbcDatasource(){
                 let d:any = {
                     "@type": this.JDBC_TYPE,
                     name: "",
@@ -254,7 +252,7 @@ const moduleName = require('feed-mgr/module-name');
                 return d;
             }
 
-            saveRoles= (datasource:any) => {
+            saveRoles(datasource:any){
 
                return this.entityAccessControlService.saveRoleMemberships('datasource',datasource.id,datasource.roleMemberships);
 
@@ -265,20 +263,18 @@ const moduleName = require('feed-mgr/module-name');
              * @param {JdbcDatasource} datasource the data source to be saved
              * @returns {Promise} with the updated data source
              */
-            save= (datasource:any) => {
-                return this.$http.post(this.RestUrlService.GET_DATASOURCES_URL, datasource)
+            save(datasource:any){
+                return this.$http.post(RestUrlConstants.GET_DATASOURCES_URL, datasource)
                     .then((response:any) => {
                         return response.data;
                     });
             }
 
-           testConnection= (datasource: any) => {
-                return this.$http.post(this.RestUrlService.GET_DATASOURCES_URL + "/test", datasource)
+           testConnection(datasource: any){
+                return this.$http.post(RestUrlConstants.GET_DATASOURCES_URL + "/test", datasource)
                     .then((response:any) => {
                         return response.data;
                     });
             }
     //}
 }
-
-angular.module(moduleName).service("DatasourcesService",DatasourcesService);

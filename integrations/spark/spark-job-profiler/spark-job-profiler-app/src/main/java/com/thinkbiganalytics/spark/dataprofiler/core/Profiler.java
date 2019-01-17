@@ -9,9 +9,9 @@ package com.thinkbiganalytics.spark.dataprofiler.core;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -127,24 +127,24 @@ public class Profiler {
     private ProfilerArguments parseCommandLineArgs(final String[] args) {
         ProfilerArguments profilerArgs = new ProfilerArguments(args, this.loader);
         profilerConfiguration.setInputAndOutputTablePartitionKey(profilerArgs.getInputAndOutputTablePartitionKey());
-        
+
         if (!setOutputTableDBAndName(profilerArgs.getProfileOutputTable(), profilerConfiguration)) {
             log.error("Illegal command line argument for output table ({})", profilerArgs.getProfileOutputTable());
             throw new IllegalArgumentException("Illegal command line argument for output table (" + profilerArgs.getProfileOutputTable() + ")");
         }
-        
+
         return profilerArgs;
     }
-    
+
     private DataSet getValidDataSet(ProfilerArguments args) {
         return this.sparkContextService.toDataSet(this.sqlContext, args.getTable());
     }
-    
+
     private DataSet getProfileDataset(ProfilerArguments args) {
         if (args.isTableBased()) {
             DataSet valid = getValidDataSet(args);
             String filter = getFilter(args);
-            
+
             if (filter != null) {
                 return valid.select(toSelectColumns(args)).filter(filter).drop(this.profilerConfiguration.getInputTablePartitionColumnName());
             } else {
@@ -154,28 +154,28 @@ public class Profiler {
             return this.sparkContextService.sql(this.sqlContext, args.getSql());
         }
     }
-    
+
     private Column[] toSelectColumns(ProfilerArguments args) {
         List<String> profiledCols = args.getProfiledColumns();
-        
-        if (args.getInputAndOutputTablePartitionKey() != null && ! "ALL".equalsIgnoreCase(args.getInputAndOutputTablePartitionKey())) {
+
+        if (args.getInputAndOutputTablePartitionKey() != null && !"ALL".equalsIgnoreCase(args.getInputAndOutputTablePartitionKey())) {
             profiledCols.add(HiveUtils.quoteIdentifier(profilerConfiguration.getInputTablePartitionColumnName()));
         }
-        
+
         Column[] columns = new Column[profiledCols.size()];
-        
+
         for (int idx = 0; idx < profiledCols.size(); idx++) {
             Column column = new Column(profiledCols.get(idx));
             columns[idx] = column;
         }
-        
+
         return columns;
     }
 
     private String getFilter(ProfilerArguments args) {
         if (args.isTableBased()) {
-            if (! args.getProfiledColumns().isEmpty()) {
-                if (args.getInputAndOutputTablePartitionKey() != null && ! "ALL".equalsIgnoreCase(args.getInputAndOutputTablePartitionKey())) {
+            if (!args.getProfiledColumns().isEmpty()) {
+                if (args.getInputAndOutputTablePartitionKey() != null && !"ALL".equalsIgnoreCase(args.getInputAndOutputTablePartitionKey())) {
                     return HiveUtils.quoteIdentifier(profilerConfiguration.getInputTablePartitionColumnName()) + " = " + HiveUtils.quoteString(args.getInputAndOutputTablePartitionKey());
                 } else {
                     return null;

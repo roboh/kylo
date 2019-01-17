@@ -18,170 +18,20 @@
  * #L%
  */
 
-import { PipeTransform } from '@angular/core';
+import {PipeTransform} from '@angular/core';
 import * as angular from 'angular';
 import * as _ from "underscore";
-import {Common} from "../../../../common/CommonTypes";
 import {DomainType, DomainTypesService} from "../../../services/DomainTypesService";
 import {TableColumnDefinition} from "../../../model/TableColumnDefinition";
 import {TableFieldPartition} from "../../../model/TableFieldPartition";
 import {TableFieldPolicy} from "../../../model/TableFieldPolicy";
-
-const moduleName = require('feed-mgr/feeds/define-feed/module-name');
-
-export interface TableCreateMethod {
-    name: string;
-    type: string;
-}
-
-export class ArrayUtils {
-    remove(array: any, element: any) {
-        for (var i = 0; i < array.length; i++) {
-            if (array[i]._id === element._id) {
-                array.splice(i, 1);
-                break;
-            }
-        }
-    }
-
-    add(array: any, element: any) {
-        this.remove(array, element);
-        array.push(element);
-    }
-
-}
+import {TableCreateMethod, TableForm} from "../../../model/feed/feed-table";
+import {ObjectUtils} from "../../../../../lib/common/utils/object-utils";
+import {StringUtils} from "../../../../common/utils/StringUtils";
 
 
-export class TableForm {
+const moduleName = require('../module-name');
 
-    defineFeedTableForm: any = {};
-
-    arrayUtils: ArrayUtils = new ArrayUtils();
-
-    constructor(private model: any) {
-
-        this.touchErrorFields.bind(this);
-    }
-
-    validate(validForm?: boolean) {
-        // console.log("validate valid ? " + validForm);
-        if (_.isUndefined(this.defineFeedTableForm.invalidColumns)) {
-            this.defineFeedTableForm.invalidColumns = [];
-        }
-        if (validForm == undefined) {
-            validForm = this.defineFeedTableForm.$valid;
-        }
-        let valid = this.model.templateId != null && this.model.table.method != null && this.model.table.tableSchema.name != null && this.model.table.tableSchema.name != ''
-            && this.model.table.tableSchema.fields.length > 0;
-
-        if (valid) {
-            //ensure we have at least 1 field (not deleted) assigned to the model)
-            var validFields = _.filter(this.model.table.tableSchema.fields, (field: any) => {
-                return field.deleted == undefined || field.deleted == false;
-            });
-            valid = validFields.length > 0;
-        }
-
-        return valid && validForm && this.defineFeedTableForm.invalidColumns.length === 0;
-    }
-
-    validateColumn(columnDef: TableColumnDefinition) {
-
-        columnDef.updateValidationErrors();
-
-        //update all columns at all times, because column removal may fix not unique name error on other columns
-        var columnsByName = _.groupBy(this.model.table.tableSchema.fields, (column: TableColumnDefinition) => {
-            //we'll disregard "not unique" name for all empty names and all deleted columns, i.e. put them into single group
-            if (column.isDeleted()) {
-                return "";
-            }
-            return column.name ? column.name.trim() : "";
-        });
-        _.each(_.keys(columnsByName), (columnName) => {
-            var group = columnsByName[columnName];
-            _.each(group, (column) => {
-                column.initializeValidationErrors();
-                if (columnName !== "") {
-                    column.validationErrors.name.notUnique = group.length > 1;
-                } else {
-                    //group with empty column name which also includes "deleted" columns
-                    column.validationErrors.name.notUnique = false;
-                }
-                this.updateFormValidation(column);
-            });
-        });
-
-        //reset partition formula if data type has changed from date/timestamp to another type
-        _.each(this.model.table.partitions, (partition: TableFieldPartition) => {
-            if (partition.columnDef === columnDef) {
-                partition.updateFormula();
-            }
-        });
-
-    }
-
-    /**
-     * Ensure the Partition Names are unique
-     * If Not add a angular error
-     */
-    partitionNamesUnique() {
-        // console.log("partitionNamesUnique");
-
-        // Validate the Partition names are unique respective to other partition names
-        _.chain(this.model.table.partitions).groupBy((partition) => {
-            return partition.field
-        }).each((group, name) => {
-            if (group.length > 1) {
-                _.each(group, (partition) => {
-                    //.invalid another partition matches the same name
-                    this.defineFeedTableForm['partition_name' + partition._id].$setValidity('notUnique', false);
-                });
-            }
-            else {
-                _.each(group, (partition) => {
-                    //valid this is a unique partition name
-                    this.defineFeedTableForm['partition_name' + partition._id].$setValidity('notUnique', true);
-                });
-            }
-        });
-
-        //Validate the Partition names are unique respective to the other fields
-
-        //an array of column names
-        var columnNames = _.map(this.model.table.tableSchema.fields, (columnDef: TableColumnDefinition) => {
-            return columnDef.name;
-        });
-        var countPartitionNames = {};
-        //add the angular errors
-        _.each(this.model.table.partitions, (partition: any) => {
-            if (partition.formula != undefined && partition.formula != 'val' && _.indexOf(columnNames, partition.field) >= 0) {
-                this.defineFeedTableForm['partition_name' + partition._id].$setValidity('notUnique', false);
-            }
-        });
-
-    }
-
-    touchErrorFields() {
-        var errors = this.defineFeedTableForm.$error;
-        for (var key in errors) {
-            if (errors.hasOwnProperty(key)) {
-                var errorFields = errors[key];
-                angular.forEach(errorFields, (errorField: any) => {
-                    errorField.$setTouched();
-                });
-            }
-        }
-    }
-
-    updateFormValidation(columnDef: TableColumnDefinition) {
-        if (columnDef.isInvalid()) {
-            this.arrayUtils.add(this.defineFeedTableForm.invalidColumns, columnDef);
-        } else {
-            this.arrayUtils.remove(this.defineFeedTableForm.invalidColumns, columnDef);
-        }
-    }
-
-}
 
 export class ExpansionPanelHelper {
 
@@ -471,7 +321,7 @@ export class DefineFeedTableController {
         }
 
         if (this.useUnderscoreInsteadOfSpaces) {
-            columnDef.name = StringUtils.replaceSpaces(columnDef.name);
+            columnDef.name = StringUtils.replaceSpaces(columnDef.name, '_');
         }
         columnDef.initFeedColumn();
         //add the column to both the source and destination tables as well as the fieldPolicies array
@@ -543,7 +393,7 @@ export class DefineFeedTableController {
      */
     addPartitionField() {
         var partitionLength = this.model.table.partitions.length;
-        var partition = new TableFieldPartition(partitionLength);
+        var partition = TableFieldPartition.atPosition(partitionLength);
         this.model.table.partitions.push(partition);
     };
 
@@ -617,7 +467,7 @@ export class DefineFeedTableController {
                     escapeToClose: false,
                     fullscreen: true,
                     parent: angular.element(document.body),
-                    templateUrl: "js/feed-mgr/shared/apply-domain-type/domain-type-conflict.component.html",
+                    templateUrl: "../../../shared/apply-domain-type/domain-type-conflict.component.html",
                     locals: {
                         data: {
                             columnDef: columnDef,
@@ -846,7 +696,7 @@ export class DefineFeedTableController {
                 escapeToClose: false,
                 fullscreen: true,
                 parent: angular.element(document.body),
-                templateUrl: "js/feed-mgr/shared/apply-domain-type/apply-table-domain-types.component.html",
+                templateUrl: "../../../shared/apply-domain-type/apply-table-domain-types.component.html",
                 locals: {
                     data: data
                 }
@@ -911,6 +761,15 @@ export class DefineFeedTableController {
     Create columns for tracking changes between original source and the target table schema
      */
     private syncFeedsColumns() {
+        let convertFieldsToObjects = false;
+        if(this.model.table.tableSchema.fields.length >0){
+          convertFieldsToObjects = !ObjectUtils.isType(this.model.table.tableSchema.fields[0],TableColumnDefinition.OBJECT_TYPE);
+        }
+        if(convertFieldsToObjects){
+          let convertedFields:TableColumnDefinition[] = this.model.table.tableSchema.fields.map((columnDef:any) => ObjectUtils.getAs(columnDef,TableColumnDefinition));
+            this.model.table.tableSchema.fields = convertedFields;
+        }
+
         _.each(this.model.table.tableSchema.fields, (columnDef: TableColumnDefinition) => {
             columnDef.initFeedColumn()
         });
@@ -957,5 +816,5 @@ angular.module(moduleName).
         },
         controllerAs: 'vm',
         controller: DefineFeedTableController,
-        templateUrl: 'js/feed-mgr/feeds/define-feed/feed-details/define-feed-table.html',
+        templateUrl: './define-feed-table.html',
     });

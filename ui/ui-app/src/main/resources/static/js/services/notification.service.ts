@@ -4,9 +4,8 @@ import {Subject} from "rxjs/Subject";
 import {Subscription} from "rxjs/Subscription";
 import {moduleName} from "./module-name";
 
-import "./module"; // ensure module is loaded first
-
-declare const IDGenerator: any;
+import "./module";
+import {IDGenerator} from '../common/utils/IDGenerator'; // ensure module is loaded first
 
 export interface Alert {
     type: string;
@@ -184,7 +183,7 @@ export class NotificationService {
      * @param icon - icon name
      * @returns the notification
      */
-    addNotification(message: string, icon: string): KyloNotification {
+    addNotification(message: string, icon: string, callback?: any): KyloNotification {
         const notification = new KyloNotification(IDGenerator.generateId("notification"), this.kyloNotificationSubject);
         notification.message = message;
         notification.icon = icon;
@@ -288,9 +287,10 @@ export class NotificationService {
         return this.addAlert(errorType, message, detailMsg, "danger", timeout);
     }
 
-    errorWithGroupKey(errorType: string, message: string, groupKey: string, detailMsg: string) {
+    errorWithGroupKey(errorType: string, message: string, groupKey: string, detailMsg?: string) {
         //   console.error("ERROR ",message, detailMsg)
         //Only add the error if it doesnt already exist
+
         if (groupKey != undefined) {
             if (this.getAlertWithGroupKey(groupKey) == null) {
                 let alert = false;

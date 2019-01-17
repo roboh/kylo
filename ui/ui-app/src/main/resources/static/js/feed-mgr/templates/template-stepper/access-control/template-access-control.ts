@@ -2,7 +2,7 @@ import * as angular from 'angular';
 import * as _ from "underscore";
 import { moduleName } from "../../module-name";
 import { RegisterTemplateServiceFactory } from '../../../services/RegisterTemplateServiceFactory';
-import AccessControlService from '../../../../services/AccessControlService';
+import {AccessControlService} from '../../../../services/AccessControlService';
 import { EntityAccessControlService } from '../../../shared/entity-access-control/EntityAccessControlService';
 
 
@@ -37,7 +37,7 @@ angular.module(moduleName).component("thinkbigTemplateAccessControl", {
         stepIndex: '@'
     },
     controllerAs: 'vm',
-    templateUrl: 'js/feed-mgr/templates/template-stepper/access-control/template-access-control.html',
+    templateUrl: './template-access-control.html',
     controller: TemplateAccessControlController,
 
 });

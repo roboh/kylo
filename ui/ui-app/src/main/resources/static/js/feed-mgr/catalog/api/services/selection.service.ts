@@ -1,5 +1,11 @@
 import {Injectable} from "@angular/core";
 import {Node} from '../models/node';
+import {ObjectUtils} from "../../../../../lib/common/utils/object-utils";
+import {KyloObject} from "../../../../../lib/common/common.model";
+import {PreviewDataSet} from "../../datasource/preview-schema/model/preview-data-set";
+import {Observable} from "rxjs/Observable";
+import {Subject} from "rxjs/Subject";
+import {SelectedItem} from "../../datasource/api/dialog/selection-dialog.component";
 
 /**
  * Defines what to do when Node is selected/de-selected in BrowserComponent
@@ -27,6 +33,7 @@ export interface SelectionPolicy {
  * its descendants will be automatically deselected.
  */
 export class DefaultSelectionPolicy implements SelectionPolicy {
+    constructor() {}
     toggleNode(node: Node, checked: boolean): void {
         if (checked) {
             this.uncheckAllDescendants(node);
@@ -52,6 +59,8 @@ export class DefaultSelectionPolicy implements SelectionPolicy {
 export class SingleSelectionPolicy implements SelectionPolicy {
     private selectedNode: Node = new Node('initial-placeholder');
 
+    constructor() {}
+
     toggleNode(node: Node, checked: boolean): void {
         this.selectedNode.setSelected(false);
         this.selectedNode = node;
@@ -72,10 +81,18 @@ export class SingleSelectionPolicy implements SelectionPolicy {
  * catalogs to be selected in database browser.
  */
 export class BlockParentObjectSelectionPolicy implements SelectionPolicy {
+
+    constructor() {}
     toggleNode(node: Node, checked: boolean): void {
     }
     isSelectChildDisabled(node: Node, childName: string): boolean {
-        return node.getChild(childName).getBrowserObject().canBeParent();
+        let childNode = node.getChild(childName);
+        if(childNode != undefined){
+            return childNode.getBrowserObject().canBeParent();
+        }
+        else {
+            return true;
+        }
     }
     isSelectAllDisabled(node: Node): boolean {
         return false;
@@ -121,22 +138,57 @@ export class DefaultSelectionStrategy implements SelectionStrategy {
     }
 
     private toggleNode(node: Node, checked: boolean) {
-        node.setSelected(checked);
-        for (let policy of this.policies) {
-            policy.toggleNode(node, checked);
+        if(node) {
+            node.setSelected(checked);
+            for (let policy of this.policies) {
+                policy.toggleNode(node, checked);
+            }
         }
+    }
+
+
+    /**
+     * check to see if the passed in policy exists in this service
+     * Example:
+     *  hasPolicy(SingleSelectionPolicy)
+     *
+     * @param {{new(): T}} type
+     * @return {boolean}
+     */
+    hasPolicy<T extends SelectionPolicy>(type: { new(): T ;}):boolean {
+        return this.policies.find(policy => ObjectUtils.getObjectClass(policy) === type.name) != undefined;
     }
 }
 
 @Injectable()
 export class SelectionService {
 
+    private singleSelection:boolean;
     private selections: Map<string, any> = new Map<string, any>();
     private lastPath: Map<string, any> = new Map<string, any>();
     private selectionStrategy: SelectionStrategy = new DefaultSelectionStrategy()
         .withPolicy(new DefaultSelectionPolicy())
         .withPolicy(new SingleSelectionPolicy())
         .withPolicy(new BlockParentObjectSelectionPolicy());
+
+    constructor(){
+        this.singleSelection = this.hasPolicy(SingleSelectionPolicy);
+    }
+
+    singleSelectionStrategy(){
+        this.selectionStrategy = new DefaultSelectionStrategy()
+            .withPolicy(new DefaultSelectionPolicy())
+            .withPolicy(new SingleSelectionPolicy())
+            .withPolicy(new BlockParentObjectSelectionPolicy());
+        this.singleSelection = true;
+    }
+
+    multiSelectionStrategy(){
+        this.selectionStrategy = new DefaultSelectionStrategy()
+            .withPolicy(new DefaultSelectionPolicy())
+            .withPolicy(new BlockParentObjectSelectionPolicy());
+        this.singleSelection = false;
+    }
 
     /**
      * Stores selection for data source
@@ -151,8 +203,26 @@ export class SelectionService {
      * Resets selection for data source
      * @param {string} datasourceId
      */
-    reset(datasourceId: string): void {
-        this.selections.delete(datasourceId);
+    reset(datasourceId?: string): void {
+        if(datasourceId) {
+            this.selections.delete(datasourceId);
+        }
+        else {
+            //clear it all
+            this.selections.clear()
+        }
+    }
+
+    clearSelected(datasourceId?: string): void {
+        let root:Node = this.get(datasourceId);
+        if(root){
+            const nodes = root.getSelectedDescendants();
+            if(nodes){
+                nodes.forEach((node:Node) => {
+                   node.setSelected(false)
+                });
+            }
+        }
     }
 
     /**
@@ -171,11 +241,61 @@ export class SelectionService {
         return this.lastPath.get(datasourceId)
     }
 
+    /**
+     * For the lastPath of a given datasource return the name
+     * @param {string} datasourceId
+     * @return {string}
+     */
+    getLastPathNodeName(datasourceId: string):string {
+      let lastPath = this.getLastPath(datasourceId);
+      let pathString = undefined;
+      if(lastPath && lastPath.path) {
+          pathString = lastPath.path;
+      }
+      return this.getLastNameInPath(pathString);
+    }
+
+    /**
+     * For a given path return the last item after the final '/'
+     * @param {string} path
+     * @return {string}
+     */
+    getLastNameInPath(path: string):string {
+        let name :string = undefined;
+      if(path) {
+          if(path.lastIndexOf("/") >0) {
+              name = path.substring(path.lastIndexOf("/")+1);
+          }
+        }
+        return name;
+    }
+
     getSelectionStrategy(): SelectionStrategy {
         return this.selectionStrategy;
     }
 
     setSelectionStrategy(strategy: SelectionStrategy) {
         this.selectionStrategy = strategy;
+        this.singleSelection = this.hasPolicy(SingleSelectionPolicy);
+    }
+
+    /**
+     * check to see if the passed in policy exists in this service
+     * Example:
+     *  hasPolicy(SingleSelectionPolicy)
+     *
+     * @param {{new(): T}} type
+     * @return {boolean}
+     */
+    hasPolicy<T extends SelectionPolicy>(type: { new(): T ;}):boolean {
+        return (<DefaultSelectionStrategy>this.selectionStrategy).hasPolicy(type);
+    }
+
+    isSingleSelection(){
+        return this.singleSelection;
+    }
+
+    isMultiSelection(){
+        return !this.isSingleSelection();
     }
 }

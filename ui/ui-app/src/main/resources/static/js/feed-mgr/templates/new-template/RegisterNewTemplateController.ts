@@ -1,9 +1,10 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
 import { moduleName } from "../module-name";
-import AccessControlService from '../../../services/AccessControlService';
-import StateService from '../../../services/StateService';
+import {AccessControlService} from '../../../services/AccessControlService';
+import {StateService} from '../../../services/StateService';
 import { RegisterTemplateServiceFactory } from '../../services/RegisterTemplateServiceFactory';
+import '../module-require';
 
 
 export class RegisterNewTemplateController {
@@ -28,7 +29,7 @@ export class RegisterNewTemplateController {
                 if (this.accessControlService.hasAction(AccessControlService.TEMPLATES_IMPORT, actionSet.actions)) {
                     this.registrationMethods.push({
                         name: "Import from NiFi", description: "Import a NiFi template directly from the current environment", icon: "near_me",
-                        iconColor: "#3483BA", onClick: this.createFromNifi()
+                        iconColor: "#3483BA", onClick: () => this.createFromNifi()
                     });
                 }
             });
@@ -39,7 +40,7 @@ export class RegisterNewTemplateController {
                 if (this.accessControlService.hasAction(AccessControlService.TEMPLATES_IMPORT, actionSet.actions)) {
                     this.registrationMethods.push({
                         name: "Import from a file", description: "Import from a Kylo archive or NiFi template file", icon: "file_upload",
-                        iconColor: "#F08C38", onClick: this.importFromFile()
+                        iconColor: "#F08C38", onClick: () => this.importFromFile()
                     });
                 }
             });
@@ -77,8 +78,9 @@ export class RegisterNewTemplateController {
 
 }
 
-angular.module(moduleName).component("registerNewTemplateController", {
-    templateUrl: 'js/feed-mgr/templates/new-template/register-new-template.html',
+const module = angular.module(moduleName).component("registerNewTemplateController", {
+    templateUrl: './register-new-template.html',
     controller:   RegisterNewTemplateController,
     controllerAs:'vm'
 });
+export default module;

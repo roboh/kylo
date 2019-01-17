@@ -1,6 +1,6 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
     export class PolicyInputFormController {
 
@@ -62,5 +62,5 @@ angular.module(moduleName)
             onPropertyChange:"&?"
         },
         controllerAs: 'vm',
-        templateUrl: 'js/feed-mgr/shared/policy-input-form/policy-input-form.html',
+        templateUrl: './policy-input-form.html',
     });

@@ -2,19 +2,20 @@ import * as angular from 'angular';
 import * as _ from 'underscore';
 import {moduleName} from "../../module-name";
 import UserService from "../../services/UserService";
-import StateService from  "../../../services/StateService";
-import AccessControlService from "../../../services/AccessControlService";
+import {StateService} from  "../../../services/StateService";
+import {AccessControlService} from "../../../services/AccessControlService";
 import AccessConstants from "../../../constants/AccessConstants";
 import "../../module";
 import "../../module-require";
 import {Transition} from "@uirouter/core";
+import {LoadingDialogService} from "../../../common/loading-dialog/loading-dialog";
 
-export default class UserDetailsController implements ng.IComponentController {
+export class UserDetailsController implements ng.IComponentController {
     $transition$: Transition;
     ngOnInit(){
     }
     static readonly $inject = ["$scope","$mdDialog","$mdToast",//"$transition$",
-                                "AccessControlService","UserService","StateService"];
+                                "AccessControlService","UserService","StateService","LoadingDialogService"];
     constructor(
         private $scope:angular.IScope,
         private $mdDialog:angular.material.IDialogService,
@@ -23,6 +24,7 @@ export default class UserDetailsController implements ng.IComponentController {
         private accessControlService:AccessControlService,
         private UserService:UserService,
         private StateService:StateService,
+        private loadingDialog:LoadingDialogService
     ){
         $scope.$watch(
             () => {return this.$error},
@@ -104,6 +106,11 @@ export default class UserDetailsController implements ng.IComponentController {
         loading:any = true;
 
         /**
+         * Indicates record is being deleted.
+         */
+        deleting:boolean = false;
+
+        /**
          * User model for the read-only view.
          * @type {UserPrincipal}
          */
@@ -121,7 +128,7 @@ export default class UserDetailsController implements ng.IComponentController {
          * @returns {boolean} {@code true} if the user can be deleted, or {@code false} otherwise
          */
         canDelete() {
-            return (this.model.systemName !== null);
+            return (this.model.systemName !== null && !this.deleting);
         };       
                 /**
          * Finds the substring of the title for the specified group that matches the query term.
@@ -168,7 +175,7 @@ export default class UserDetailsController implements ng.IComponentController {
          */
         onCancel() {
             if (this.model.systemName === null) {
-                this.StateService.Auth().navigateToUsers();
+                this.StateService.Auth.navigateToUsers();
             }
         };
 
@@ -176,23 +183,30 @@ export default class UserDetailsController implements ng.IComponentController {
          * Deletes the current user.
          */
         onDelete() {
+            this.loadingDialog.showDialog();
+            this.deleting = true;
             var name = (angular.isString(this.model.displayName) && this.model.displayName.length > 0) ? this.model.displayName : this.model.systemName;
             this.UserService.deleteUser(encodeURIComponent(this.model.systemName))
                     .then(() => {
+                        this.loadingDialog.hideDialog();
+                        this.deleting = false;
+                        this.StateService.Auth.navigateToUsers();
                         this.$mdToast.show(
-                                this.$mdToast.simple()
-                                        .textContent("Successfully deleted the user " + name)
-                                        .hideDelay(3000)
+                            this.$mdToast.simple()
+                                .textContent("Successfully deleted the user " + name)
+                                .hideDelay(3000)
                         );
-                        this.StateService.Auth().navigateToUsers();
+
                     }, () => {
+                        this.loadingDialog.hideDialog();
+                        this.deleting = false;
                         this.$mdDialog.show(
                                 this.$mdDialog.alert()
                                         .clickOutsideToClose(true)
                                         .title("Delete Failed")
                                         .textContent("The user " + name + " could not be deleted. " )//+ err.data.message
                                         .ariaLabel("Failed to delete user")
-                                        .ok("Got it!")
+                                        .ok("Ok")
                         );
                     });
         };
@@ -256,8 +270,8 @@ export default class UserDetailsController implements ng.IComponentController {
         onSave() {
             var model = angular.copy(this.editModel);
             this.UserService.saveUser(model)
-                    .then(() => {
-                        this.model = model;
+                    .then((updated: any) => {
+                        this.model = updated;
                     });
         };
 
@@ -294,17 +308,16 @@ export default class UserDetailsController implements ng.IComponentController {
                         return item.name;
                     });
         };
-
-
 }
 
-angular.module(moduleName)
+const module = angular.module(moduleName)
   .component("userDetailsController", { 
         bindings: {
             $transition$: '<'
         },
         controller: UserDetailsController,
         controllerAs: "vm",
-        templateUrl: "js/auth/users/user-details/user-details.html"
+        templateUrl: "./user-details.html"
     });    
 //.controller('UserDetailsController', ["$scope","$mdDialog","$mdToast","$transition$","AccessControlService","UserService","StateService",UserDetailsController]);
+export default module;

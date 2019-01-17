@@ -1,3 +1,7 @@
+export interface Tag {
+    name:string;
+}
+
 /**
  * Field of a schema object such as a table or file.
  */
@@ -68,9 +72,17 @@ export class SchemaField {
      */
     updatedTracker?: boolean;
 
+
+    deleted?:boolean;
+
     /**
      * Tags assigned to this column.
      * //{ name: string }
      */
-    tags?: any[];
+    tags?: Tag[];
+
+    constructor(){
+        this.sampleValues = [];
+        this.tags = [];
+    }
 }

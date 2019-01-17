@@ -4,9 +4,10 @@ import  AccessConstants from '../constants/AccessConstants';
 import 'kylo-services-module';
 import * as _ from "underscore";
 import CommonRestUrlService from "./CommonRestUrlService";
-import UserGroupService from "./UserGroupService";
+import {UserGroupService} from "./UserGroupService";
+import {EntityAccessControlService} from "../feed-mgr/shared/entity-access-control/EntityAccessControlService";
 
-export default class AccessControlService extends AccessConstants {
+export class AccessControlService extends AccessConstants {
  /**
  * Interacts with the Access Control REST API.
  * @constructor
@@ -141,6 +142,9 @@ static readonly $inject = ["$http","$q","$timeout","CommonRestUrlService","UserG
                         return true;
                     }
                     var requiredPermissions = data.permissions || null;
+                    if(requiredPermissions == null && data.permissionsKey) {
+                        requiredPermissions = AccessControlService.getStatePermissions(data.permissionsKey);
+                    }
                     //if its a future lazy loaded state, allow it
                     if (this.isFutureState(toStateName)) {
                         valid = true;
@@ -152,7 +156,7 @@ static readonly $inject = ["$http","$q","$timeout","CommonRestUrlService","UserG
                             if(angular.isArray(requiredPermissions)){
 
                                 //find the first match
-                                 valid = requiredPermissions.length ==0 || this.hasAnyAction(requiredPermissions,allowedActions)
+                                 valid = requiredPermissions.length ==0 || this.hasAllActions(requiredPermissions,allowedActions)
                             }
                             else {
                                 valid = this.hasAction(requiredPermissions,allowedActions);
@@ -163,6 +167,19 @@ static readonly $inject = ["$http","$q","$timeout","CommonRestUrlService","UserG
                 return valid;
 
             };
+
+            /**
+             * Find the missing actions required for a given transition
+             * @param transition
+             */
+            findMissingPermissions = (requiredPermissions: string[])=>{
+                let missingPermissions = [];
+                var allowedActions = this.cachedUserAllowedActions[this.DEFAULT_MODULE];
+                    if(requiredPermissions != null) {
+                        missingPermissions  = this.findMissingActions(requiredPermissions, allowedActions)
+                    }
+                    return missingPermissions
+             };
             /**
              * Gets the current user from the server
              * @returns {*}
@@ -210,7 +227,7 @@ static readonly $inject = ["$http","$q","$timeout","CommonRestUrlService","UserG
              * @param {boolean|null} true to save the data in a cache, false or underfined to not.  default is false
              * @returns {Promise} containing an {@link ActionSet} with the allowed actions
              */
-            getUserAllowedActions= (opt_module?: any, cache?: any)=>{
+            getUserAllowedActions(opt_module?: any, cache?: any):Promise<any> {
                 var defer: any = null;
 
                 var safeModule = angular.isString(opt_module) ? encodeURIComponent(opt_module) : this.DEFAULT_MODULE;
@@ -261,6 +278,31 @@ static readonly $inject = ["$http","$q","$timeout","CommonRestUrlService","UserG
                         });
                 }
                 return this.AVAILABLE_ACTIONS_;
+            }
+            findMissingActions= (names: any, actions: any)=>{
+                if (names == "" || names == null || names == undefined || (angular.isArray(names) && names.length == 0)) {
+                    return [];
+                }
+                var missing = _.filter(names,(name: any)=>{
+                    return !this.hasAction(name.trim(), actions);
+                });
+                return missing;
+            }
+            /**
+             * Determines if any name in array of names is included in the allowed actions it will return true, otherwise false
+             *
+             * @param names an array of names
+             * @param actions An array of allowed actions
+             * @returns {boolean}
+             */
+            hasAllActions= (names: any, actions: any)=>{
+                if (names == "" || names == null || names == undefined || (angular.isArray(names) && names.length == 0)) {
+                    return true;
+                }
+                var valid = _.every(names,(name: any)=>{
+                    return this.hasAction(name.trim(), actions);
+                });
+                return valid;
             }
             /**
              * Determines if any name in array of names is included in the allowed actions it will return true, otherwise false

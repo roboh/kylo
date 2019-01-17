@@ -2,9 +2,9 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
 import { moduleName } from "./module-name";
-import AddButtonService from '../../services/AddButtonService';
+import {AddButtonService} from '../../services/AddButtonService';
 import { DomainTypesService } from '../services/DomainTypesService';
-
+import "./module-require";
 /**
  * Identifier for this page.
  * @type {string}
@@ -85,8 +85,9 @@ export class DomainTypesController {
 
 }
 // Register the controller
-angular.module(moduleName).component("domainTypesController", {
-    templateUrl: "js/feed-mgr/domain-types/domain-types.html",
+const module = angular.module(moduleName).component("domainTypesController", {
+    templateUrl: "./domain-types.html",
     controller: DomainTypesController,
     controllerAs: "vm"
 });
+export default module;

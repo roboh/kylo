@@ -1,6 +1,6 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 /**
  * A user-defined property (or business metadata) on a category or feed.
@@ -157,7 +157,7 @@ angular.module(moduleName).component("thinkbigPropertyList", {
         model: "=properties",
         isValid: "=?"
     },
-    templateUrl: "js/feed-mgr/shared/property-list/property-list.html"
+    templateUrl: "./property-list.html"
 });
 angular.module(moduleName).component("thinkbigPropertyListEditor", {
     controller: PropertyListController,
@@ -169,6 +169,6 @@ angular.module(moduleName).component("thinkbigPropertyListEditor", {
         model: "=properties",
         isValid: "=?"
     },
-    templateUrl: "js/feed-mgr/shared/property-list/property-list-editor.html"
+    templateUrl: "./property-list-editor.html"
 });
 

@@ -1,99 +1,155 @@
-import {Component, Input, OnInit} from "@angular/core";
-import {TemplateMetadata} from "../services/model";
+import {Component, OnInit} from "@angular/core";
+import {TemplateMetadata, TemplateRepository} from "../services/model";
 import {TemplateService} from "../services/template.service";
 import {TdDataTableService} from "@covalent/core/data-table";
-import {IPageChangeEvent} from "@covalent/core/paging";
 import {StateService} from "@uirouter/angular";
+import {MatDialog} from "@angular/material/dialog";
+import {TemplateUpdatesDialog} from "../dialog/template-updates-dialog";
+import {IPageChangeEvent} from "@covalent/core";
+import {MatTableDataSource} from '@angular/material/table';
 
 /**
  * List templates from repository ready for installation.
  */
 @Component({
     selector: "list-templates",
-    templateUrl: "js/repository/list/list.component.html"
+    templateUrl: "./list.component.html"
 })
 export class ListTemplatesComponent implements OnInit {
 
-    static readonly LOADER = "ListTemplatesComponent.LOADER";
-
-    downloadUrl: string = "/proxy/v1/repository/templates";
-
     constructor(private templateService: TemplateService,
                 private dataTableService: TdDataTableService,
-                private state: StateService) {
+                private state: StateService,
+                private dialog: MatDialog) {
     }
 
-    selectedTemplate: string;
-
+    loading:boolean = true;
+    selectedTemplate: TemplateMetadata;
+    errorMsg: string = "";
     /**
      * List of available templates
      */
-    @Input("templates")
-    public templates: TemplateMetadata[];
+    templates: TemplateMetadata[] = [];
+    filteredList: TemplateMetadata[] = [];
+    repositories: TemplateRepository[] = [];
+    selectedRepository: TemplateRepository;
+
+    dataSource = new MatTableDataSource();
+
+    length = undefined;
 
     public ngOnInit() {
-        this.filter();
+        this.init();
     }
 
-    /**
-     * Install template if not already installed
-     */
-    importTemplates() {
-        if (this.selectedTemplate.length == 0) {
-            console.warn("Select at least one template to import.")
-            return;
-        }
+    private init() {
+        this.templateService.getRepositories().subscribe(
+            (repos: TemplateRepository[]) => {
+                this.repositories = repos;
+                if(this.repositories.length > 0){
+                    this.selectedRepository = this.repositories[0];
+                    this.loadTemplates();
+                }
+            }
+        );
+    }
 
-        console.log("importing templates: ", this.selectedTemplate);
-        this.templateService.importTemplate(this.selectedTemplate)
-            .subscribe(data => console.log(data),
-                error => console.error(error));
+    loadTemplates() {
+
+        this.templateService.getTemplatesInRepository(this.selectedRepository).subscribe(
+            (data: TemplateMetadata[]) => {
+                this.templates = data;
+                this.filteredList = data;
+                this.search();
+                this.sortData(null);
+                this.loading = false;
+            },
+            (error: any) => {
+                console.log(error);
+                if(error.developerMessage)
+                    this.errorMsg += error.developerMessage;
+
+
+                this.loading = false;
+            }
+        );
+    }
+
+    direction: string = "";
+    icon: string = "";
+    sortData(event: any) {
+
+        const isAsc = this.direction === 'asc' || this.direction === "";
+        if(isAsc){
+            this.direction = 'desc';
+            this.icon = "keyboard_arrow_up";
+        } else{
+            this.direction = 'asc';
+            this.icon = "keyboard_arrow_down";
+        }
+        this.templates = this.templates.sort((a, b) => {
+            return this.compare(a.templateName, b.templateName, isAsc);
+        });
+        this.search();
+
+        if(event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+    }
+
+    private compare(a: number | string, b: number | string, isAsc: boolean) {
+        return (a < b ? -1 : 1) * (isAsc ? 1 : -1);
     }
 
     /*
      * download template from repository.
      */
     downloadTemplate(template: TemplateMetadata) {
-        this.templateService.downloadTemplate(template.fileName).subscribe(blob => {
-            var link = document.createElement('a');
-            link.href = window.URL.createObjectURL(blob);
+        this.templateService.downloadTemplate(template).subscribe(blob => {
+            var link: any = document.createElement('a');
+            link.href = (window.URL as any).createObjectURL(blob);
             link.download = template.fileName;
             link.click();
         });
     }
 
-    /**
-     * select/un-select template to be imported
-     */
-    toggleImportTemplate(template: TemplateMetadata) {
-        this.selectedTemplate = template.fileName;
+    updateTemplate(template: TemplateMetadata) {
+        this.importTemplate(template);
+    }
+
+    importTemplate(template: TemplateMetadata) {
+        this.selectedTemplate = template;
         let param = {"template": template};
         this.state.go("import-template", param);
     }
 
-    pageSize: number = 50;
+    pageSize: number = 10;
     currentPage: number = 1;
     fromRow: number = 1;
-    searchTerm: string = '';
     filteredTotal = 0;
-    filteredTemplates: TemplateMetadata[] = [];
+    searchTerm = '';
+
+    search(): void {
+        // this.dataSource.filter = filter.trim().toLowerCase();
+        let newData = this.dataTableService.filterData(this.templates, this.searchTerm, true, []);
+        this.filteredTotal = newData.length;
+        newData = this.dataTableService.pageData(newData, this.fromRow, this.currentPage * this.pageSize);
+        this.filteredList = newData;
+    }
 
     page(pagingEvent: IPageChangeEvent): void {
         this.fromRow = pagingEvent.fromRow;
         this.currentPage = pagingEvent.page;
         this.pageSize = pagingEvent.pageSize;
-        this.filter();
+        this.search();
     }
 
-    search(searchTerm: string): void {
-        this.searchTerm = searchTerm;
-        this.filter();
-    }
+    viewUpdates(template: TemplateMetadata): void {
 
-    private filter(): void {
-        let newData = this.dataTableService.filterData(this.templates, this.searchTerm, true, []);
-        this.filteredTotal = newData.length;
-        newData = this.dataTableService.pageData(newData, this.fromRow, this.currentPage * this.pageSize);
-        this.filteredTemplates = newData;
+        this.dialog.open(TemplateUpdatesDialog, {
+            data: {updates: template.updates},
+            width: '40%'
+        });
     }
 }

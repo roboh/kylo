@@ -20,8 +20,12 @@ package com.thinkbiganalytics.kylo.spark.file.metadata;
  * #L%
  */
 
+import org.apache.commons.lang3.StringEscapeUtils;
+
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * create the scala spark script to get the File metadata
@@ -29,9 +33,7 @@ import java.util.List;
 public class FileMetadataScalaScriptGenerator {
 
     public static String getScript(String[] paths) {
-
-        return getScript(Arrays.asList(paths));
-
+        return getScript(Arrays.asList(paths), new HashMap<String, String>());
     }
 
     /**
@@ -47,20 +49,25 @@ public class FileMetadataScalaScriptGenerator {
      * rowTag - string the rowtag
      * properties - HashMap<string,string>
      */
-    public static String getScript(List<String> paths) {
+    public static String getScript(List<String> paths, Map<String, String> options) {
+        final StringBuilder sb = new StringBuilder()
+            .append("import org.apache.spark.sql.functions.{concat, lit, concat_ws,collect_list,split,size,col,when}\n")
+            .append("import com.thinkbiganalytics.kylo.catalog._\n")
+            .append("var listBuffer = new scala.collection.mutable.ListBuffer[org.apache.spark.sql.DataFrame]()\n");
 
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("import scala.collection.mutable.ListBuffer\n");
-        sb.append("import org.apache.spark.sql.functions.{concat, lit, concat_ws,collect_list,split,size,col,when}\n");
-        sb.append("import com.thinkbiganalytics.kylo.catalog._\n");
-        sb.append("var listBuffer = new ListBuffer[org.apache.spark.sql.DataFrame]()\n");
-
-        sb.append("var kyloClientBuilder = KyloCatalog.builder(sqlContext) \n");
-        sb.append("var kyloClient = kyloClientBuilder.build()\n");
-        sb.append("var kyloClientReader = kyloClient.read.format(\"com.thinkbiganalytics.spark.file.metadata\")\n");
+        sb.append("var kyloClientBuilder = KyloCatalog.builder() \n")
+            .append("var kyloClient = kyloClientBuilder.build()\n")
+            .append("var kyloClientReader = kyloClient.read.format(\"com.thinkbiganalytics.spark.file.metadata\")");
+        if (options != null) {
+            for (Map.Entry<String, String> entry : options.entrySet()) {
+                if (entry.getKey().startsWith("spark.hadoop.")) {
+                    sb.append(".option(\"").append(StringEscapeUtils.escapeJava(entry.getKey())).append("\", \"").append(StringEscapeUtils.escapeJava(entry.getValue())).append("\")");
+                }
+            }
+        }
+        sb.append("\n");
         for (String path : paths) {
-            sb.append("listBuffer += kyloClientReader.load(\"" + path + "\")\n");
+            sb.append("listBuffer += kyloClientReader.load(\"").append(StringEscapeUtils.escapeJava(path)).append("\")\n");
         }
 
         sb.append("val dataFrameList = listBuffer.toList\n");
@@ -75,13 +82,14 @@ public class FileMetadataScalaScriptGenerator {
                   + "}\n"
                   + "})\n");
 
-        sb.append(" var fileMetadataDf = unionedFileMetadataDf.select(col(\"mimeType\"),col(\"encoding\"),"
+        sb.append("var fileMetadataDf = unionedFileMetadataDf.select(col(\"mimeType\"),col(\"encoding\"),"
                   + "when(col(\"properties\")(\"headerCount\").isNotNull,col(\"properties\")(\"headerCount\")).otherwise(lit(\"0\")).as(\"headerCount\")"
                   + ",when(col(\"properties\")(\"delimiter\").isNotNull,col(\"properties\")(\"delimiter\")).otherwise(lit(\"\")).as(\"delimiter\")"
                   + ",when(col(\"properties\")(\"rowTag\").isNotNull,col(\"properties\")(\"rowTag\")).otherwise(lit(\"\")).as(\"rowTag\")"
                   + ",col(\"properties\").as(\"properties\")"
                   + ",col(\"resource\"))\n");
-        sb.append("fileMetadataDf");
+        sb.append("var df = fileMetadataDf\n");
+        sb.append("df\n");
 
         return sb.toString();
 
@@ -89,7 +97,7 @@ public class FileMetadataScalaScriptGenerator {
 
     public static void main(String[] args) {
 
-        String str = FileMetadataScalaScriptGenerator.getScript(new String[]{"file:///var/kylo/application.properties", "file:///var/kylo/"});
+        String str = FileMetadataScalaScriptGenerator.getScript(new String[]{"file:///var/kylo/cd_catalog.xml"});
         int i = 0;
 
     }

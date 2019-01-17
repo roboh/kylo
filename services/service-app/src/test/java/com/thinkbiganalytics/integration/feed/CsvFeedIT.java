@@ -123,7 +123,8 @@ public class CsvFeedIT extends FeedITBase {
         DefaultExecutedJob[] jobs = getJobs(0,50,null,null);
 
         //TODO assert all executed jobs are successful
-        DefaultExecutedJob ingest = Arrays.stream(jobs).filter(job -> ("functional_tests." + feedName.toLowerCase()).equals(job.getFeedName())).findFirst().get();
+        DefaultExecutedJob ingest = Arrays.stream(jobs).filter(job -> ("functional_tests." + feedName.toLowerCase()).equals(job.getFeedName()))
+            .findFirst().orElseThrow(() -> new AssertionError("Missing jobs for functional_tests." + feedName.toLowerCase()));
         Assert.assertEquals(ExecutionStatus.COMPLETED, ingest.getStatus());
         Assert.assertEquals(ExitStatus.COMPLETED.getExitCode(), ingest.getExitCode());
 
@@ -249,7 +250,7 @@ public class CsvFeedIT extends FeedITBase {
     }
 
     protected void assertEditChanges(ArrayNode diffs) {
-        Assert.assertTrue(versionPatchContains(diffs, new Diff("replace", "/properties/0/value", getEditedFileName())));
+        Assert.assertTrue(versionPatchContains(diffs, new Diff("replace", "/properties/3/value", getEditedFileName())));
         Assert.assertTrue(versionPatchContains(diffs, new Diff("replace", "/schedule/schedulingPeriod", "20 sec")));
         Assert.assertTrue(versionPatchContains(diffs, new Diff("remove", "/description")));
         Assert.assertTrue(versionPatchContains(diffs, new Diff("add", "/tags/1")));

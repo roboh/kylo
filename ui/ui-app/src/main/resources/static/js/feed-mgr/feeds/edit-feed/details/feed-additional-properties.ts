@@ -1,7 +1,7 @@
 import * as angular from 'angular';
 import * as _ from 'underscore';
 import 'pascalprecht.translate';
-import AccessControlService from '../../../../services/AccessControlService';
+import {AccessControlService} from '../../../../services/AccessControlService';
 import { EntityAccessControlService } from '../../../shared/entity-access-control/EntityAccessControlService';
 const moduleName = require('feed-mgr/feeds/edit-feed/module-name');
 var directive = function() {
@@ -33,7 +33,7 @@ export class FeedAdditionalPropertiesController {
          */
         allowEdit:boolean = !this.versions;
         
-        model:any = this.FeedService.editFeedModel;
+        model:any = this.FeedService.editFeed;
         versionFeedModel:any = this.FeedService.versionFeedModel;
         versionFeedModelDiff:any = this.FeedService.versionFeedModelDiff;
         editModel:any = {};

@@ -80,6 +80,10 @@ import com.thinkbiganalytics.jobrepo.repository.rest.model.JobAction;
 import com.thinkbiganalytics.jobrepo.rest.controller.JobsRestController;
 import com.thinkbiganalytics.jobrepo.rest.controller.ServiceLevelAssessmentsController;
 import com.thinkbiganalytics.json.ObjectMapperSerializer;
+import com.thinkbiganalytics.kylo.catalog.rest.controller.ConnectorController;
+import com.thinkbiganalytics.kylo.catalog.rest.controller.DataSourceController;
+import com.thinkbiganalytics.kylo.catalog.rest.model.Connector;
+import com.thinkbiganalytics.kylo.catalog.rest.model.DataSource;
 import com.thinkbiganalytics.metadata.api.feed.Feed;
 import com.thinkbiganalytics.metadata.rest.model.data.Datasource;
 import com.thinkbiganalytics.metadata.rest.model.data.JdbcDatasource;
@@ -161,6 +165,7 @@ public class IntegrationTestBase {
     protected static final String FILTER_BY_SLA_ID = "slaId%3D%3D";
 
     protected static final String APP_NIFI = "nifi";
+    protected static final String APP_KYLO_SERVICES = "kylo-services";
     protected static final String APP_HADOOP = "hadoop";
 
     @SuppressWarnings("SpringJavaAutowiringInspection")
@@ -285,7 +290,7 @@ public class IntegrationTestBase {
     }
 
     protected void startClean() {
-        cleanup();
+       cleanup();
     }
 
     private void configureObjectMapper(ObjectMapper om) {
@@ -330,7 +335,7 @@ public class IntegrationTestBase {
         LOG.info("Test Infrastructure type is: " + kyloConfig.getTestInfrastructureType());
         if (kyloConfig.getTestInfrastructureType() != null && KyloConfig.TEST_INFRASTRUCTURE_TYPE_KUBERNETES.equals(kyloConfig.getTestInfrastructureType())) {
             LOG.info("Kubernetes Namespace is: " + kubernetesConfig.getKubernetesNamespace());
-            String getPodNameCommand = String.format("export KUBECTL_POD_NAME=$(kubectl get po -o jsonpath=\"{range .items[*]}{@.metadata.name}{end}\" -l app=%s)", application);
+            String getPodNameCommand = String.format("export KUBECTL_POD_NAME=$(kubectl -n %s get po -o jsonpath=\"{range .items[*]}{@.metadata.name}{end}\" -l app=%s)", kubernetesConfig.getKubernetesNamespace() ,application);
             String kubeCommand = String.format("kubectl cp %s %s/$KUBECTL_POD_NAME:%s", localFile, kubernetesConfig.getKubernetesNamespace(), remoteDir);
             LOG.info("The kube commands is: " + getPodNameCommand + ";" + kubeCommand);
             runLocalShellCommand(getPodNameCommand + ";" + kubeCommand);
@@ -356,8 +361,8 @@ public class IntegrationTestBase {
             if (application.equals(APP_HADOOP)) {
                 podAndApplicationName = kubernetesConfig.getHadoopPodName();
             }
-            String getPodNameCommand = String.format("export KUBECTL_POD_NAME=$(kubectl get po -o jsonpath=\"{range .items[*]}{@.metadata.name}{end}\" -l app=%s)", podAndApplicationName);
-            String kubeCommand = String.format("kubectl exec $KUBECTL_POD_NAME -c %s -- %s ", podAndApplicationName, command);
+            String getPodNameCommand = String.format("export KUBECTL_POD_NAME=$(kubectl -n %s get po -o jsonpath=\"{range .items[*]}{@.metadata.name}{end}\" -l app=%s)", kubernetesConfig.getKubernetesNamespace() ,podAndApplicationName);
+            String kubeCommand = String.format("kubectl -n %s exec $KUBECTL_POD_NAME -c %s -- %s ", kubernetesConfig.getKubernetesNamespace(), podAndApplicationName, command);
             LOG.info("The kube commands is: " + getPodNameCommand + ";" + kubeCommand);
             runLocalShellCommand(getPodNameCommand + ";" + kubeCommand);
         } else {
@@ -491,6 +496,16 @@ public class IntegrationTestBase {
         datasources = getDatasources();
         Assert.assertTrue(datasources.length == 0);
 
+        DataSource[] jdbcDataSources = getJdbcDataSources();
+        if(jdbcDataSources != null) {
+            for (DataSource dataSource : jdbcDataSources) {
+                    deleteDataSource(dataSource.getId());
+            }
+        }
+
+        jdbcDataSources = getJdbcDataSources();
+        Assert.assertTrue(jdbcDataSources.length == 0);
+
     }
 
     protected void disableExistingFeeds() {
@@ -580,11 +595,11 @@ public class IntegrationTestBase {
     }
 
     protected String getProcessingDttm(String feedId) {
-        return getJsonPathOfProfileSummary(feedId, "processing_dttm[0]");
+        return getJsonPathOfProfileSummary(feedId, "content[0].processing_dttm");
     }
 
     protected int getProfileSummary(String feedId, String profileType) {
-        return Integer.parseInt(getJsonPathOfProfileSummary(feedId, "find {entry ->entry.metrictype == '" + profileType + "'}.metricvalue"));
+        return Integer.parseInt(getJsonPathOfProfileSummary(feedId, "content.find {entry ->entry.metrictype == '" + profileType + "'}.metricvalue"));
     }
 
     protected String getJsonPathOfProfileSummary(String feedId, String path) {
@@ -1256,6 +1271,31 @@ public class IntegrationTestBase {
         return response.as(JdbcDatasource.class);
     }
 
+    protected Connector[] listConnectors(){
+        Response response = given(ConnectorController.BASE)
+            .when()
+            .get();
+
+        response.then().statusCode(HTTP_OK);
+
+        return response.as(Connector[].class);
+
+    }
+
+
+    protected DataSource createDataSource(DataSource ds) {
+        LOG.info("Creating dataSource '{}'", ds.getTitle());
+
+        Response response = given(DataSourceController.BASE)
+            .body(ds)
+            .when()
+            .post();
+
+        response.then().statusCode(HTTP_OK);
+
+        return response.as(DataSource.class);
+    }
+
     protected JdbcDatasource[] getDatasources() {
         LOG.info("Getting datasources");
 
@@ -1266,6 +1306,28 @@ public class IntegrationTestBase {
         response.then().statusCode(HTTP_OK);
 
         return response.as(JdbcDatasource[].class);
+    }
+
+    protected DataSource[] getJdbcDataSources() {
+        LOG.info("Getting datasources");
+
+        Response response = given(DataSourceController.PLUGIN_ID)
+            .when()
+            .get("?pluginIds=jdbc");
+
+        response.then().statusCode(HTTP_OK);
+
+        return response.as(DataSource[].class);
+    }
+
+    protected void deleteDataSource(String dataSourceId) {
+        LOG.info("Delete dataSource {} ",dataSourceId);
+
+        Response response = given(DataSourceController.BASE)
+            .when()
+            .delete("/" + dataSourceId);
+
+        response.then().statusCode(HTTP_NO_CONTENT);
     }
 
 

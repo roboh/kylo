@@ -1,11 +1,12 @@
 import * as angular from "angular";
 import * as _ from "underscore";
 import {DomainType} from "./DomainTypesService";
-import {Common} from "../../common/CommonTypes";
-import AccessControlService from "../../services/AccessControlService";
+import {AccessControlService} from "../../services/AccessControlService";
 import {TableColumnDefinition} from "../model/TableColumnDefinition";
 import {TableFieldPolicy} from "../model/TableFieldPolicy";
-import { EntityAccessControlService } from "../shared/entity-access-control/EntityAccessControlService";
+import {EntityAccessControlService} from "../shared/entity-access-control/EntityAccessControlService";
+import {FeedConstants} from "./FeedConstants";
+import {Common} from '../../../lib/common/CommonTypes';
 
 /**
  * A cache of the controllerservice Id to its display name.
@@ -38,54 +39,32 @@ export class FeedService {
         /**
          * The initial CRON expression used when a user selects Cron for the Schedule option
          */
-        DEFAULT_CRON:any= "0 0 12 1/1 * ? *";
+        DEFAULT_CRON:string= FeedConstants.DEFAULT_CRON;
 
         /**
          * In the Data Processing section these are the available Strategies a user can choose when defining the feed
          */
-        mergeStrategies:any= [
-            { name: 'Sync', type: 'SYNC', hint: 'Replace table content', disabled: false },
-            { name: 'Rolling sync', type: 'ROLLING_SYNC', hint: 'Replace content in matching partitions' },
-            { name: 'Merge', type: 'MERGE', hint: 'Insert all rows', disabled: false },
-            { name: 'Dedupe and merge', type: 'DEDUPE_AND_MERGE', hint: 'Insert rows ignoring duplicates', disabled: false },
-            { name: 'Merge using primary key', type: 'PK_MERGE', hint: 'Upsert using primary key' }
-        ];
+        mergeStrategies:any= FeedConstants.mergeStrategies;
 
         /**
          * The available Target Format options
          */
-        targetFormatOptions:any= [{ label: "ORC", value: 'STORED AS ORC' },
-        { label: "PARQUET", value: 'STORED AS PARQUET' },
-        { label: "AVRO", value: 'STORED AS AVRO' },
-        {
-            label: "TEXTFILE",
-            value: 'ROW FORMAT SERDE \'org.apache.hadoop.hive.serde2.OpenCSVSerde\' WITH SERDEPROPERTIES ( \'separatorChar\' = \',\' ,\'escapeChar\' = \'\\\\\' ,\'quoteChar\' = \'"\')'
-                + ' STORED AS'
-                + ' TEXTFILE'
-        },
-        { label: "RCFILE", value: 'ROW FORMAT SERDE "org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe" STORED AS RCFILE' }];
+        targetFormatOptions:any= FeedConstants.targetFormatOptions;
         /**
          * The available Compression options for a given targetFormat {@see this#targetFormatOptions}
          */
-        compressionOptions:any= { "ORC": ['NONE', 'SNAPPY', 'ZLIB'], "PARQUET": ['NONE', 'SNAPPY'], "AVRO": ['NONE'] };
+        compressionOptions:any= FeedConstants.compressionOptions;
 
         /**
          * Standard data types for column definitions
          */
-        columnDefinitionDataTypes:any= ['string', 'int', 'bigint', 'tinyint', 'decimal', 'double', 'float', 'date', 'timestamp', 'boolean', 'binary'];
-
-            /**
-             * Returns an array of all the compression options regardless of the {@code targetFormat}
-             * (i.e. ['NONE','SNAPPY','ZLIB']
-             * @returns {Array}
-             */
-            allCompressionOptions= () => {
-                let arr: any[] = [];
-                _.each(this.compressionOptions, (options: any) => {
-                    arr = _.union(arr, options);
-                });
-                return arr;
-            };
+        columnDefinitionDataTypes:any= FeedConstants.columnDefinitionDataTypes;
+        /**
+         * Returns an array of all the compression options regardless of the {@code targetFormat}
+         * (i.e. ['NONE','SNAPPY','ZLIB']
+         * @returns {Array}
+         */
+        allCompressionOptions= FeedConstants.allCompressionOptions;
             /**
              * Returns the feed object model for creating a new feed
              *
@@ -200,7 +179,7 @@ export class FeedService {
              */
             newCreateFeed= () =>{
                 this.createFeedModel = this.getNewCreateFeedModel();
-                this.VisualQueryService.resetModel();
+                this.visualQueryService.resetModel();
                 this.FeedCreationErrorService.reset();
             }
             /**
@@ -275,7 +254,7 @@ export class FeedService {
                     delete createFeedModel[key];
                 })
 
-                this.VisualQueryService.resetModel();
+                this.visualQueryService.resetModel();
                 this.FeedCreationErrorService.reset();
             }
 
@@ -301,7 +280,7 @@ export class FeedService {
              * @returns {{name: (*|string), partition: null, profile: boolean, standardization: null, validation: null}}
              */
             newTableFieldPolicy(fieldName: string): TableFieldPolicy {
-                return new TableFieldPolicy(fieldName);
+                return TableFieldPolicy.forName(fieldName);
                 // return {name: fieldName || '', partition: null, profile: true, standardization: null, validation: null};
             }
             /**
@@ -310,7 +289,7 @@ export class FeedService {
             setTableFields(fields: any[], policies: any[] = null) {
                 //ensure the fields are of type TableColumnDefinition
                 let newFields =  _.map(fields,(field) => {
-                    if(!field['classType'] || field['classType'] != 'TableColumnDefinition' ){
+                    if(!field['objectType'] || field['objectType'] != 'TableColumnDefinition' ){
                         let columnDef = new TableColumnDefinition();
                         angular.extend(columnDef,field);
                         return columnDef;
@@ -481,6 +460,10 @@ export class FeedService {
                 }
             copy.properties = properties;
 
+            //Force this feed to always be a final feed
+            //Any save through this service is not a DRAFT feed
+            copy.mode="COMPLETE";
+
             //clear the extra UI only properties
             copy.inputProcessor = null
             copy.nonInputProcessors = null
@@ -589,7 +572,7 @@ export class FeedService {
             showFeedSavingDialog= (ev: any, message: any, feedName: any) => {
                 this.$mdDialog.show({
                     controller: 'FeedSavingDialogController',
-                    templateUrl: 'js/feed-mgr/feeds/edit-feed/details/feed-saving-dialog.html',
+                    templateUrl: '../feeds/edit-feed/details/feed-saving-dialog.html',
                     parent: angular.element(document.body),
                     targetEvent: ev,
                     clickOutsideToClose: false,
@@ -612,21 +595,17 @@ export class FeedService {
                 this.$mdDialog.hide();
             }
 
-        validateSchemaDidNotChange=(model:any)=>{
-            var valid = true;
+        validateSchemaDidNotChange(model:any) {
+            let valid = true;
             //if we are editing we need to make sure we dont modify the originalTableSchema
             if(model.id && model.originalTableSchema && model.table && model.table.tableSchema) {
                 //if model.originalTableSchema != model.table.tableSchema  ... ERROR
                 //mark as invalid if they dont match
-                var origFields = _.chain(model.originalTableSchema.fields).sortBy('name').map(function (i) {
-                    return i.name + " " + i.derivedDataType;
-                }).value().join()
-                var updatedFields = _.chain(model.table.tableSchema.fields).sortBy('name').map(function (i) {
-                    return i.name + " " + i.derivedDataType;
-                }).value().join()
+                const origFields = _.chain(model.originalTableSchema.fields).sortBy('name').map(_.property("derivedDataType")).value().join(",");
+                const updatedFields = _.chain(model.table.tableSchema.fields).sortBy('name').map(_.property("derivedDataType")).value().join(",");
                 valid = origFields == updatedFields;
             }
-            return valid
+            return valid;
         }
             /**
              * Save the model Posting the data to the server
@@ -640,7 +619,7 @@ export class FeedService {
             this.FeedPropertyService.initSensitivePropertiesForEditing(model.properties);
 
                 var deferred = this.$q.defer();
-                var successFn = function (response: any) {
+                var successFn = (response: any) => {
                     var invalidCount = 0;
                     if (response.data && response.data.success) {
                         //update the feed versionId and internal id upon save
@@ -734,6 +713,23 @@ export class FeedService {
                 promise.then(successFn, errorFn);
                 return promise;
             }
+
+            /**
+             * Call server to return a list of Feed Names (from JCR)
+             * @returns {angular.IHttpPromise<any>}
+             */
+            getFeedNamesFromJcr() {
+                let successFn = (response: any) => {
+                    return response.data;
+                };
+                let errorFn = (err: any) => {
+                    console.log("Error getting list of feed names from JCR " + err);
+                };
+                let promise = this.$http.get(this.RestUrlService.GET_FEED_NAMES_URL);
+                promise.then(successFn, errorFn);
+                return promise;
+            }
+
             /**
              * Call the server to get a list of all the available Preconditions that can be used when saving/scheduling the feed
              * @returns {HttpPromise}
@@ -993,7 +989,7 @@ static $inject = ["$http", "$q", "$mdToast", "$mdDialog", "RestUrlService", "Vis
         private $mdToast: angular.material.IToastService,
         private $mdDialog: angular.material.IDialogService,
         private RestUrlService: any,
-        private VisualQueryService: any,
+        private visualQueryService: any,
         private FeedCreationErrorService: any,
         private FeedPropertyService: any,
         private accessControlService: AccessControlService,
@@ -1052,6 +1048,3 @@ export class FeedSavingDialogController {
         };
     }
 }
-angular.module(require("feed-mgr/module-name"))
-.service('FeedService',FeedService)
-.controller('FeedSavingDialogController', FeedSavingDialogController);

@@ -1,9 +1,11 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-import AccessControlService from '../../../services/AccessControlService';
+import {AccessControlService} from '../../../services/AccessControlService';
 import { RegisterTemplateServiceFactory } from '../../services/RegisterTemplateServiceFactory';
 import { EntityAccessControlService } from '../../shared/entity-access-control/EntityAccessControlService';
+import {HomeController} from '../../../main/HomeController';
 const moduleName = require('feed-mgr/feeds/edit-feed/module-name');
+import '../../../plugin/template-table-option/define-table/define-table-feed-details.html';
 
 
 var FeedUploadFileDialogController = function ($scope:any, $mdDialog:any, $http:any, RestUrlService:any
@@ -534,8 +536,8 @@ export class controller {
                                     self.selectedTabIndex = tabIndex;
                                 }
 
-                                this.registerTemplateService.initializeProperties(updatedFeedResponse.data.registeredTemplate,'edit');
-                                self.model.inputProcessors = this.registerTemplateService.removeNonUserEditableProperties(updatedFeedResponse.data.registeredTemplate.inputProcessors,true);
+                                self.registerTemplateService.initializeProperties(updatedFeedResponse.data.registeredTemplate,'edit',[]);
+                                self.model.inputProcessors = self.registerTemplateService.removeNonUserEditableProperties(updatedFeedResponse.data.registeredTemplate.inputProcessors,true);
                                 //sort them by name
                                 self.model.inputProcessors = _.sortBy(self.model.inputProcessors,'name')
 
@@ -548,7 +550,7 @@ export class controller {
                                         return self.model.inputProcessorType == processor.type;
                                     });
                                 }
-                                self.model.nonInputProcessors = this.registerTemplateService.removeNonUserEditableProperties(updatedFeedResponse.data.registeredTemplate.nonInputProcessors,false);
+                                self.model.nonInputProcessors = self.registerTemplateService.removeNonUserEditableProperties(updatedFeedResponse.data.registeredTemplate.nonInputProcessors,false);
                                 self.updateMenuOptions();
                                 self.loadingFeedData = false;
                                 self.model.isStream = updatedFeedResponse.data.registeredTemplate.stream;
@@ -679,6 +681,16 @@ export class controller {
         }
     });
 
+// angular.module(moduleName).component('FeedDetailsController', {
+//     controller: controller,
+//     controllerAs: "vm",
+//     templateUrl: require('./feed-details.html'),
+// });
+
+
 angular.module(moduleName).controller('FeedDetailsController', ["$scope","$q","$transition$","$mdDialog","$mdToast","$http","$state","AccessControlService","RestUrlService","FeedService","RegisterTemplateService","StateService","SideNavService","FileUpload","ConfigurationService","EntityAccessControlDialogService","EntityAccessControlService","UiComponentsService","AngularModuleExtensionService","DatasourcesService",controller]);
 
 angular.module(moduleName).controller('FeedUploadFileDialogController',["$scope","$mdDialog","$http","RestUrlService","FileUpload","feedId",FeedUploadFileDialogController]);
+
+const module = angular.module(moduleName);
+export default module;

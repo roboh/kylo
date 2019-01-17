@@ -1,5 +1,6 @@
 import * as angular from "angular";
 import {moduleName} from "../module-name";
+import '../../../assets/images/kylo-logo-orange.png';
 
 export default class controller implements ng.IComponentController{
 constructor(private $scope: IScope,
@@ -27,7 +28,7 @@ export class AboutKyloService{
        showAboutDialog = ()=> {
             this.$mdDialog.show({
                 controller: 'AboutKyloDialogController',
-                templateUrl: 'js/common/about-kylo/about.html',
+                templateUrl: './about.html',
                 parent: angular.element(document.body),
                 clickOutsideToClose: false,
                 escapeToClose: true,

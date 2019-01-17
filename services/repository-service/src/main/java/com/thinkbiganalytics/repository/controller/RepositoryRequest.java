@@ -22,33 +22,29 @@ package com.thinkbiganalytics.repository.controller;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import org.hibernate.validator.constraints.NotBlank;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RepositoryRequest {
-    private String fileName;
-    private String uploadKey;
-    private String importComponents;
 
-    public String getFileName() {
-        return fileName;
+    @NotBlank
+    private String repositoryName;
+    @NotBlank
+    private String repositoryType;
+
+    public String getRepositoryName() {
+        return repositoryName;
     }
 
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
+    public void setRepositoryName(String repositoryName) {
+        this.repositoryName = repositoryName;
     }
 
-    public String getUploadKey() {
-        return uploadKey;
+    public String getRepositoryType() {
+        return repositoryType;
     }
 
-    public void setUploadKey(String uploadKey) {
-        this.uploadKey = uploadKey;
-    }
-
-    public String getImportComponents() {
-        return importComponents;
-    }
-
-    public void setImportComponents(String importComponents) {
-        this.importComponents = importComponents;
+    public void setRepositoryType(String repositoryType) {
+        this.repositoryType = repositoryType;
     }
 }

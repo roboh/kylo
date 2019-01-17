@@ -78,8 +78,13 @@ public class DataSourceCredentialConfig {
          */
         @Override
         public Map<String, String> getCredentials(DataSource ds, Set<Principal> principals) {
-            log.info("No DataSourceCredentialProviders have been configured - no credentials retrieved");
+            log.debug("No supporting credential provider configured for data source: {}", ds.getTitle());
             return Collections.emptyMap();
+        }
+
+        @Override
+        public Void removeCredentials(DataSource ds) {
+            return null;
         }
 
         /* (non-Javadoc)
@@ -87,7 +92,7 @@ public class DataSourceCredentialConfig {
          */
         @Override
         public DataSource applyPlaceholders(DataSource ds, Set<Principal> principals) {
-            log.warn("No DataSourceCredentialProviders have been configured - data source not modified");
+            log.debug("No supporting credential provider configured for data source: {}", ds.getTitle());
             return ds;
         }
 
@@ -96,7 +101,7 @@ public class DataSourceCredentialConfig {
          */
         @Override
         public DataSource applyCredentials(DataSource ds, Set<Principal> principals) {
-            log.warn("No DataSourceCredentialProviders have been configured - data source not modified");
+            log.debug("No supporting credential provider configured for data source: {}", ds.getTitle());
             return ds;
         }
         

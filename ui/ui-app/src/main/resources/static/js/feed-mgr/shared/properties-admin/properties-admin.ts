@@ -1,6 +1,6 @@
 import * as angular from 'angular';
 
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 /**
  * A user-defined property field (or business metadata) for categories or feeds.
@@ -169,26 +169,20 @@ class PropertiesAdminController {
 angular.module(moduleName).component("thinkbigPropertiesAdmin", {
     controller: PropertiesAdminController,
     controllerAs: "vm",
-    require: {
-        ngModel: "ngModel"
-    },
     bindings: {
         model: "=fields",
         isValid: "=?"
     },
-    templateUrl: "js/feed-mgr/shared/properties-admin/properties-admin.html"
+    templateUrl: "./properties-admin.html"
 });
 
 angular.module(moduleName).component("thinkbigPropertiesAdminEditor", {
     controller: PropertiesAdminController,
     controllerAs: "vm",
-    require: {
-        ngModel: "ngModel"
-    },
     bindings: {
         model: "=fields",
         isValid: "=?"
     },
-    templateUrl: "js/feed-mgr/shared/properties-admin/properties-admin-editor.html"
+    templateUrl: "./properties-admin-editor.html"
 });
 

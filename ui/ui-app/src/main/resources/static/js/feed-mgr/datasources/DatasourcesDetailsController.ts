@@ -1,9 +1,9 @@
 
 import * as angular from 'angular';
 import * as _ from "underscore";
-import AccessControlService from '../../services/AccessControlService';
+import {AccessControlService} from '../../services/AccessControlService';
 import { DatasourcesService } from '../services/DatasourcesService';
-import StateService from '../../services/StateService';
+import {StateService} from '../../services/StateService';
 import { Transition } from '@uirouter/core';
 import { EntityAccessControlService } from '../shared/entity-access-control/EntityAccessControlService';
 const moduleName = require('feed-mgr/datasources/module-name');
@@ -121,7 +121,7 @@ export class DatasourcesDetailsController {
                         .then((access: any) => {
                             this.allowChangePermissions = access;
                         });
-                }, () => {
+                }, (error:any) => {
                     this.stateService.FeedManager().Datasource().navigateToDatasources();
                 });
         } else {

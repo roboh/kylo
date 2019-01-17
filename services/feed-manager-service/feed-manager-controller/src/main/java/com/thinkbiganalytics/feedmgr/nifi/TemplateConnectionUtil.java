@@ -31,6 +31,7 @@ import com.thinkbiganalytics.nifi.rest.client.NifiComponentNotFoundException;
 import com.thinkbiganalytics.nifi.rest.model.NiFiPropertyDescriptorTransform;
 import com.thinkbiganalytics.nifi.rest.support.NifiConnectionUtil;
 import com.thinkbiganalytics.nifi.rest.support.NifiConstants;
+import com.thinkbiganalytics.nifi.rest.support.NifiProcessUtil;
 
 import org.apache.nifi.web.api.dto.ConnectableDTO;
 import org.apache.nifi.web.api.dto.ConnectionDTO;
@@ -260,6 +261,10 @@ public class TemplateConnectionUtil {
                         stopwatch.reset();
                     }
                 }
+                //ensure the input port is running
+                    reusableTemplatePort.setState(NifiProcessUtil.PROCESS_STATE.RUNNING.name());
+                    log.info("Connected feed to reusable input port.  Marking reusable input port as running {} ({})  ", reusableTemplatePort.getName(), reusableTemplatePort.getId());
+                    restClient.getNiFiRestClient().ports().updateInputPort(reusableTemplateCategoryGroupId, reusableTemplatePort);
 
 
             }
@@ -435,9 +440,13 @@ public class TemplateConnectionUtil {
         Set<PortDTOWithGroupInfo> ports = new HashSet<>();
         String reusableProcessGroupId = this.getReusableTemplateProcessGroupId();
         if (reusableProcessGroupId != null) {
-            ProcessGroupFlowDTO processGroup = restClient.getNiFiRestClient().processGroups().flow(reusableProcessGroupId);
-            if (processGroup != null) {
-                ports.addAll(getReusableFeedInputPorts(processGroup));
+            try {
+                ProcessGroupFlowDTO processGroup = restClient.getNiFiRestClient().processGroups().flow(reusableProcessGroupId);
+                if (processGroup != null) {
+                    ports.addAll(getReusableFeedInputPorts(processGroup));
+                }
+            } catch (final NifiComponentNotFoundException e) {
+                log.debug("Reusable template process group not found: {}", reusableProcessGroupId, e);
             }
         }
         return ports;

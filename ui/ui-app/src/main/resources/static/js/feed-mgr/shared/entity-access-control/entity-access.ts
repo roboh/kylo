@@ -1,8 +1,8 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-import AccessControlService from '../../../services/AccessControlService';
+import {AccessControlService} from '../../../services/AccessControlService';
 import { EntityAccessControlService } from './EntityAccessControlService';
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 export class EntityAccessControlController {
 
@@ -88,7 +88,7 @@ export class EntityAccessControlController {
          * Flag that the user has updated the role memberships
          * @type {boolean}
          */
-        this.entity.roleMembershipsUpdated = angular.isUndefined(this.entity.roleMembershipsUpdated) ? false : this.entity.roleMembershipsUpdated;
+        this.entity.roleMembershipsUpdated = _.isUndefined(this.entity.roleMembershipsUpdated) ? false : this.entity.roleMembershipsUpdated;
 
         /**
          * Flag to indicate we should query for the roles from the server.
@@ -249,7 +249,7 @@ angular.module(moduleName).component('entityAccessControl', {
         queryForEntityAccess: '=?'
     }, 
     controllerAs: 'vm',
-    templateUrl: 'js/feed-mgr/shared/entity-access-control/entity-access-control.html',
+    templateUrl: './entity-access-control.html',
     controller: EntityAccessControlController
 });
 

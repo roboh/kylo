@@ -93,12 +93,5 @@ export class controller implements ng.IComponentController {
 
 }
 
-angular.module(moduleName).component("serviceLevelAssessmentController", {
-    controller: controller,
-    bindings: {
-        $transition$: "<"
-    },
-    controllerAs: "vm",
-    templateUrl: "js/ops-mgr/sla/assessment.html"
-});
-
+const module = angular.module(moduleName).controller("serviceLevelAssessmentController", controller);
+export default module;

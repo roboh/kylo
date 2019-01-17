@@ -4,7 +4,8 @@ import {BrowserObject} from './browser-object';
  * Browser object hierarchy
  */
 export class Node {
-    private name: string;
+    public name: string;
+    public displayName: string;
     private isSelected: boolean = false;
     private childrenMap: Map<string, Node> = new Map<string, Node>();
     private parent: Node;
@@ -12,6 +13,7 @@ export class Node {
 
     constructor(name: string) {
         this.name = name;
+        this.displayName = decodeURI(name);
     }
 
     countSelectedDescendants(): number {
@@ -56,7 +58,13 @@ export class Node {
     }
 
     isChildSelected(name: string) {
-        return this.childrenMap.get(name).isSelected;
+        let node = this.childrenMap.get(name);
+        if(node != undefined ){
+            return node.isSelected;
+        }
+        else {
+            return false;
+        }
     }
 
     countSelectedChildren() {

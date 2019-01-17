@@ -1,7 +1,8 @@
 import {SchemaParser} from "../../../../model/field-policy";
 import {FileMetadata} from "./file-metadata";
-import {PreviewDataSet, SparkDataSet} from "./preview-data-set";
+import {PreviewDataSet} from "./preview-data-set";
 import {PreviewDataSetRequest} from "./preview-data-set-request";
+import {SparkDataSet} from "../../../../model/spark-data-set.model";
 
 
 export interface SparkScript{
@@ -18,6 +19,11 @@ export class PreviewFileDataSet extends PreviewDataSet{
     public mimeType:string;
     public sparkScript?:SparkScript;
     public schemaParser:SchemaParser;
+
+    /**
+     * if a user updates the schema parser via the ui it will update it here
+     */
+    public userModifiedSchemaParser:SchemaParser;
 
     public constructor(init?:Partial<PreviewFileDataSet>) {
         super(init);
@@ -47,8 +53,7 @@ export class PreviewFileDataSet extends PreviewDataSet{
 
     public toSparkDataSet(): SparkDataSet {
         let sparkDataSet = super.toSparkDataSet();
-        let path = this.getPreviewItemPath();
-        sparkDataSet.options['path'] = path;
+        sparkDataSet.paths = Array.isArray(this.files) ? this.files.map(file => file.filePath) : null;
 
         //parse the schemaParser
         if(this.schemaParser){
@@ -63,6 +68,13 @@ export class PreviewFileDataSet extends PreviewDataSet{
             })
         }
         return sparkDataSet;
+    }
+
+    applyPreview(dataset:PreviewDataSet, rawData:boolean){
+        super.applyPreview(dataset, rawData);
+        if(!rawData){
+            this.schemaParser = (<PreviewFileDataSet>dataset).schemaParser;
+        }
     }
 
 }

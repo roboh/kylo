@@ -17,24 +17,46 @@
   limitations under the License.
   #L%
   -->
-<div>
-  <span *ngIf="!success && !error">
-    <span class="card-title">Publish '{{data.templateName}}' to Resource Repository</span><br><br>
-    <div>Overwrite template if it already exists?</div><br><br>
-  </span>
-  <span *ngIf="success">
-    <ng-md-icon icon="check_circle" size="20" style="fill:green"></ng-md-icon>
-    <span class="card-title">Successfully published '{{data.templateName}}' to repository.</span>
-  </span>
-  <span *ngIf="error">
-    <ng-md-icon icon="error" size="20" style="fill:red"></ng-md-icon>
-    <span class="card-title">Error publishing '{{data.templateName}}' to repository. Please try again later.</span>
-  </span>
+<div *ngIf="!repositories || repositories.length == 0" fxLayout="column" fxLayoutGap="30px">
+  <div fxLayout="row">
+    <div class="md-text">No user repository found to publish template. Please create a new repository.</div>
+  </div>
+  <div fxLayout="row" fxLayoutAlign="end none" fxLayoutGap="10px">
+    <button mat-raised-button class="right" aria-label="Close" (click)="close()">
+      <span class="md-body-2">Close</span>
+    </button>
+  </div>
 </div>
-<div style="float: right;"><br><br>
-  <span *ngIf="!success && !error">
-    <button mat-button class="warn center" (click)="publishTemplate(true)" aria-label="Publish">Yes</button>
-    <button mat-button class="primary center" (click)="publishTemplate(false)" aria-label="No">No</button>
-  </span>
-  <button mat-button class="center" aria-label="Cancel" (click)="close()">{{(success || error )? 'Close': 'Cancel'}}</button>
+<div *ngIf="repositories.length > 0" fxLayout="column" fxLayoutGap="30px">
+  <div *ngIf="loading" fxLayout="row" fxLayoutAlign="center">
+    <mat-spinner [diameter]="25" color="accent"></mat-spinner>
+  </div>
+  <div *ngIf="success && !error" fxLayout="row">
+    <ng-md-icon icon="check_circle" size="20" style="fill:green; margin-left: 0px; margin-right: 0px;"></ng-md-icon>
+    <div class="md-text">Successfully published '{{data.templateName}}' to repository.</div>
+  </div>
+  <div *ngIf="error" fxLayout="row">
+    <ng-md-icon icon="error" size="20" style="fill:red; margin-left: 0px; margin-right: 0px;"></ng-md-icon>
+    <div>Cannot publish '{{data.templateName}}': {{errorMsg}}</div>
+  </div>
+  <div fxLayout="row" fxLayoutAlign="space-evenly center">
+    <mat-form-field>
+      <mat-select [(ngModel)]="selectedRepository" placeholder="Select Repository">
+        <ng-container *ngFor="let repo of repositories">
+            <span *ngIf="!repo.readOnly">
+              <mat-option [value]="repo"><span class="md-text" title="{{repo.name}}">{{repo.name | truncate:30}}</span></mat-option>
+            </span>
+        </ng-container>
+      </mat-select>
+    </mat-form-field>
+    <mat-checkbox labelPosition="before" [(ngModel)]="overwrite">Overwrite</mat-checkbox>
+  </div>
+  <div fxLayout="row" fxLayoutAlign="end none" fxLayoutGap="10px">
+    <button mat-raised-button class="right" aria-label="Cancel" (click)="close()">
+      <span class="md-body-2">{{(success || error )? 'Close': 'Cancel'}}</span>
+    </button>
+    <button *ngIf="!(success || error )" mat-raised-button [disabled]="!selectedRepository" color="primary" class="right" aria-label="Publish" (click)="publishTemplate()">
+      <span class="md-body-2">Publish</span>
+    </button>
+  </div>
 </div>

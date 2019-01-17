@@ -1,6 +1,6 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 
 export class PolicyInputFormService {
@@ -21,9 +21,8 @@ export class PolicyInputFormService {
         this.ngOnInit();
     }
 
-    static readonly $inject = ["$http", "$q", "$mdToast", "$mdDialog"];
-    constructor(private $http: angular.IHttpService, private $q: angular.IQService,
-        private $mdToast: angular.material.IToastService, private $mdDialog: angular.material.IDialogService) {
+    static readonly $inject = ["$mdDialog"];
+    constructor(private $mdDialog: angular.material.IDialogService) {
 
             this.init();
     }

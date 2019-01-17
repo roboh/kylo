@@ -1,23 +1,23 @@
 import {ListTableView} from "./ListTableViewTypes";
-import {Common} from "../common/CommonTypes";
 import * as angular from 'angular';
 import * as _ from "underscore";
 import TableOption = ListTableView.TableOption;
 import SortOption = ListTableView.SortOption;
-import {Sort} from "@angular/material/sort";
 import {moduleName} from './module-name';
+import {DefaultPaginationDataService} from "./PaginationDataService";
+import {Common} from '../../lib/common/CommonTypes';
 
 export class DefaultTableOptionsService implements ListTableView.TableOptionService{
     sortOptions:Common.Map<SortOption[]> = {};
     static $inject = ["PaginationDataService"]
-    constructor(private PaginationDataService:ListTableView.PaginationDataService) {}
+    constructor(private paginationDataService:DefaultPaginationDataService) {}
    
     newSortOptions(key:string, labelValueMap:Common.Map<string>, defaultValue:string, defaultDirection:string):SortOption[]{
         var sortOptions = Object.keys(labelValueMap).map((mapKey:string) => {
             var value = labelValueMap[mapKey];
-            var sortOption = {label: mapKey, value: value, direction: '', reverse: false, type: 'sort',default:'asc'}
+            var sortOption = {label: mapKey, value: value, direction: '', reverse: false, type: 'sort'}
             if (defaultValue && value == defaultValue) {
-                sortOption['default'] = defaultDirection || 'asc';
+                sortOption['default'] = defaultValue;
                 sortOption['direction'] = defaultDirection || 'asc';
                 sortOption['reverse'] = sortOption['direction'] == 'asc' ? false : true;
                 sortOption['icon'] = sortOption['direction'] == 'asc' ? 'keyboard_arrow_up' : 'keyboard_arrow_down';
@@ -66,7 +66,7 @@ export class DefaultTableOptionsService implements ListTableView.TableOptionServ
      * @param key
      */
     initializeSortOption(key:string) {
-        var currentOption = this.PaginationDataService.sort(key);
+        var currentOption = this.paginationDataService.sort(key);
         if (currentOption) {
             this.setSortOption(key, currentOption)
         }
@@ -86,7 +86,7 @@ export class DefaultTableOptionsService implements ListTableView.TableOptionServ
             if (sortOption.reverse) {
                 val = '-' + val;
             }
-            this.PaginationDataService.sort(key, val);
+            this.paginationDataService.sort(key, val);
         }
     }
 

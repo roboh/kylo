@@ -10,19 +10,24 @@ import {CovalentFileModule} from "@covalent/core/file";
 import {UIRouterModule} from "@uirouter/angular";
 
 import {KyloCommonModule} from "../../../../common/common.module";
-import {CatalogApiModule} from "../../api/catalog-api.module";
+import {FileSizePipe} from "./file-size.pipe";
 import {UploadComponent} from "./upload.component";
 import {uploadStates} from "./upload.states";
+import {MatToolbarModule} from "@angular/material/toolbar";
+import {MatIconModule} from "@angular/material/icon";
 
 @NgModule({
     declarations: [
+        FileSizePipe,
         UploadComponent
     ],
     entryComponents: [
         UploadComponent
     ],
+    exports: [
+        UploadComponent
+    ],
     imports: [
-        CatalogApiModule,
         CommonModule,
         CovalentFileModule,
         FlexLayoutModule,
@@ -31,9 +36,19 @@ import {uploadStates} from "./upload.states";
         MatCardModule,
         MatDividerModule,
         MatListModule,
-        MatProgressBarModule,
-        UIRouterModule.forChild({states: uploadStates})
+        MatToolbarModule,
+        MatIconModule,
+        MatProgressBarModule
     ]
 })
 export class UploadModule {
+}
+
+@NgModule({
+    imports: [
+        UploadModule,
+        UIRouterModule.forChild({states: uploadStates})
+    ]
+})
+export class UploadRouterModule {
 }

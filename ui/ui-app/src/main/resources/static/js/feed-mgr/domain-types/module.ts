@@ -1,29 +1,21 @@
 import * as angular from 'angular';
-import lazyLoadUtil from "../../kylo-utils/LazyLoadUtil";
 import AccessConstants from "../../constants/AccessConstants";
 import {moduleName} from "./module-name";
 import "../../codemirror-require/module";
 import "kylo-feedmgr";
 import "kylo-common";
 import "kylo-services";
+import "./codemirror-regex.css";
+import "./details/matchers/regexp-editor.component.scss";
+
 
 class ModuleFactory  {
     module: ng.IModule;
     constructor () {
        // Window.CodeMirror = CodeMirror;
-        this.module = angular.module(moduleName,[]); 
+        this.module = angular.module(moduleName,["ui.codemirror"]);
         this.module.config(["$stateProvider", "$compileProvider", this.configFn.bind(this)]); 
-        this.module.run(['$ocLazyLoad', this.runFn.bind(this)]);
     }
-    runFn($ocLazyLoad:any){
-            $ocLazyLoad.load({
-                name: 'kylo',
-                files: [
-                    "js/feed-mgr/domain-types/codemirror-regex.css",
-                    "js/feed-mgr/domain-types/details/matchers/regexp-editor.component.css"
-                ]
-            });
-     }
 
     configFn($stateProvider: any, $compileProvider: any){
            //preassign modules until directives are rewritten to use the $onInit method.
@@ -39,7 +31,16 @@ class ModuleFactory  {
                     }
                 },
                 resolve: {
-                    loadMyCtrl: this.lazyLoadController(["feed-mgr/domain-types/DomainTypesController"])
+                    loadMyCtrl: ['$ocLazyLoad', ($ocLazyLoad: any) => {
+                        return import(/* webpackChunkName: "admin.domain-types.controller" */ './DomainTypesController')
+                            .then(mod => {
+
+                                return $ocLazyLoad.load(mod.default)
+                            })
+                            .catch(err => {
+                                throw new Error("Failed to load DomainTypesController, " + err);
+                            });
+                    }]
                 },
                 data: {
                     breadcrumbRoot: true,
@@ -65,7 +66,16 @@ class ModuleFactory  {
                             return DomainTypesService.newDomainType();
                         }
                     },
-                    loadMyCtrl: this.lazyLoadController(["feed-mgr/domain-types/details/details.component"])
+                    loadMyCtrl: ['$ocLazyLoad', ($ocLazyLoad: any) => {
+                        return import(/* webpackChunkName: "admin.domain-types-details.component" */ './details/details.component')
+                            .then(mod => {
+
+                                return $ocLazyLoad.load(mod.default)
+                            })
+                            .catch(err => {
+                                throw new Error("Failed to load domainTypeDetailsComponent, " + err);
+                            });
+                    }]
                 },
                 data: {
                     breadcrumbRoot: false,
@@ -75,11 +85,7 @@ class ModuleFactory  {
                 }
             });
     }
-
-    lazyLoadController(path: any) {
-            return lazyLoadUtil.lazyLoadController(path, "feed-mgr/domain-types/module-require");
-        }
-} 
+}
 const module = new ModuleFactory();
 export default module;
 

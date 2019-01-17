@@ -2,15 +2,16 @@ import * as angular from 'angular';
 import * as _ from 'underscore';
 import {moduleName} from "../../module-name";
 import UserService from "../../services/UserService";
-import StateService from  "../../../services/StateService";
-import AccessControlService from "../../../services/AccessControlService";
+import {StateService} from  "../../../services/StateService";
+import {AccessControlService} from "../../../services/AccessControlService";
 import PermissionsTableController from "../../shared/permissions-table/permissions-table";
 import AccessConstants from "../../../constants/AccessConstants";
 import "../../module";
 import "../../module-require";
 import {Transition} from "@uirouter/core";
+import {LoadingDialogService} from "../../../common/loading-dialog/loading-dialog";
 
-export default class GroupDetailsController implements ng.IComponentController {
+export class GroupDetailsController implements ng.IComponentController {
     $transition$: Transition;
     $error:any = {duplicateName: false, missingName: false };
     /**
@@ -74,10 +75,15 @@ export default class GroupDetailsController implements ng.IComponentController {
      * @type {Array.<UserPrincipal>}
      */
     users: any[] = [];
+
+    /**
+     * flag set when a delete is in progress
+     */
+    deleting:boolean = false;
     
     ngOnInit(){}
     static readonly $inject = ["$scope","$mdDialog","$mdToast",//"$transition$",
-                                "AccessControlService","UserService","StateService"];
+                                "AccessControlService","UserService","StateService","LoadingDialogService"];
     constructor(
         private $scope:angular.IScope,
         private $mdDialog:angular.material.IDialogService,
@@ -85,7 +91,8 @@ export default class GroupDetailsController implements ng.IComponentController {
         //private $transition$: Transition,
         private accessControlService:AccessControlService,
         private UserService:UserService,
-        private StateService:StateService){
+        private StateService:StateService,
+        private loadingDialog:LoadingDialogService){
          // Update isValid when $error is updated
         $scope.$watch(
             () => {return this.$error},
@@ -121,7 +128,7 @@ export default class GroupDetailsController implements ng.IComponentController {
          * @returns {boolean} {@code true} if the user can be deleted, or {@code false} otherwise
          */
         canDelete() {
-            return (this.model.systemName !== null);
+            return (!this.deleting && this.model.systemName !== null);
         };       
 
         /**
@@ -129,24 +136,33 @@ export default class GroupDetailsController implements ng.IComponentController {
          */
         onCancel() {
             if (this.model.systemName === null) {
-                this.StateService.Auth().navigateToGroups();
+                this.StateService.Auth.navigateToGroups();
             }
         };
+        testLoading(){
+            this.loadingDialog.showDialog();
+        }
 
         /**
-         * Deletes the current user.
+         * Deletes the current group.
          */
         onDelete() {
+            this.deleting = true;
+            this.loadingDialog.showDialog();
             var name = (angular.isString(this.model.title) && this.model.title.length > 0) ? this.model.title : this.model.systemName;
-             this.UserService.deleteGroup(this.$transition$.params().groupId)
+             this.UserService.deleteGroup(this.model.systemName)
                     .then(() => {
+                        this.deleting = false;
+                        this.loadingDialog.hideDialog()
                         this.$mdToast.show(
                                 this.$mdToast.simple()
                                         .textContent("Successfully deleted the group " + name)
                                         .hideDelay(3000)
                         );
-                        this.StateService.Auth().navigateToGroups();
+                        this.StateService.Auth.navigateToGroups();
                     }, () => {
+                        this.deleting = false
+                        this.loadingDialog.hideDialog()
                         this.$mdDialog.show(
                                 this.$mdDialog.alert()
                                         .clickOutsideToClose(true)
@@ -216,8 +232,8 @@ export default class GroupDetailsController implements ng.IComponentController {
     onSave() { 
         var model = angular.copy(this.editModel);
         this.UserService.saveGroup(model)
-                .then(() => {
-                    this.model = model;
+                .then((updated: any) => {
+                    this.model = updated;
                     this.groupId = this.model.systemName;
                 });
     };
@@ -237,17 +253,18 @@ export default class GroupDetailsController implements ng.IComponentController {
      *
      * @param user the user
      */
-    onUserClick = function(user: any) {
-        this.StateService.Auth().navigateToUserDetails(user.systemName);
+    onUserClick(user: any) {
+        this.StateService.Auth.navigateToUserDetails(user.systemName);
     };
 }
 
-angular.module(moduleName)
+const module = angular.module(moduleName)
 .component("groupDetailsController", { 
         bindings: {
             $transition$: '<'
         },
         controller: GroupDetailsController,
         controllerAs: "vm",
-        templateUrl: "js/auth/groups/group-details/group-details.html"
+        templateUrl: "./group-details.html"
     });
+export default module;

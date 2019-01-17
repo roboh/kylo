@@ -1,8 +1,8 @@
 import * as angular from "angular";
 import {moduleName} from "../module-name";
 import * as _ from "underscore";
-import ChartJobStatusService from "../../services/ChartJobStatusService";
 import HttpService from "../../../services/HttpService";
+import {OpsManagerChartJobService} from "../../services/ops-manager-chart-job.service";
 declare const d3: any;
 
 export default class controller implements ng.IComponentController{
@@ -16,11 +16,11 @@ chartData: any[] = [];
 runningCounts: any[] = [];
 maxDatapoints: number = 20;
 chartOptions: any;
-refreshIntervalTime: any;
+refreshIntervalTime: number=1000;
 
 static readonly $inject = ["$scope","$element","$http","$q","$interval","StateService",
                             "OpsManagerJobService","OpsManagerDashboardService",
-                            "HttpService","ChartJobStatusService","BroadcastService"];
+                            "HttpService","OpsManagerChartJobService","BroadcastService"];
 $onInit() {
     this.ngOnInit();
 }
@@ -41,7 +41,7 @@ ngOnInit() {
             useVoronoi: false,
             clipEdge: false,
             duration: 0,
-            height:136,
+            height:146,
             useInteractiveGuideline: true,
             xAxis: {
                 axisLabel: 'Time',
@@ -73,7 +73,9 @@ ngOnInit() {
             }
         }
     };
-
+if(this.refreshIntervalTime == undefined) {
+    this.refreshIntervalTime = 1000;
+}
     this.refresh();
     this.setRefreshInterval();
 
@@ -88,7 +90,7 @@ constructor(private $scope: IScope,
         private OpsManagerJobService: any,
         private OpsManagerDashboardService: any,
         private httpService: HttpService,
-        private chartJobStatusService: ChartJobStatusService,
+        private opsManagerChartJobService: OpsManagerChartJobService,
         private BroadcastService: any){
         
         $scope.$on('$destroy', ()=>{
@@ -200,7 +202,7 @@ constructor(private $scope: IScope,
                 this.chartData[0].values.push([data.date, data.count]);
             }
             else {
-               var initialChartData = this.chartJobStatusService.toChartData([data]);
+               var initialChartData = this.opsManagerChartJobService.toChartData([data]);
                 initialChartData[0].key = 'Running';
                 this.chartData = initialChartData;
             }
@@ -222,7 +224,7 @@ constructor(private $scope: IScope,
             }
         }
         createChartData=(responseData: any)=>{
-            this.chartData = this.chartJobStatusService.toChartData(responseData);
+            this.chartData = this.opsManagerChartJobService.toChartData(responseData);
             var max = d3.max(this.runningCounts, (d: any)=>{
                 return d.count; } );
             if(max == undefined || max ==0) {
@@ -233,6 +235,9 @@ constructor(private $scope: IScope,
             }
             this.chartOptions.chart.yDomain = [0, max];
             this.chartOptions.chart.yAxis.ticks =max;
+            this.chartOptions.chart.color = (d: any)=>{
+                return "#00B2B1";
+            };
           //  this.chartApi.update();
         }
 
@@ -260,5 +265,5 @@ constructor(private $scope: IScope,
         refreshIntervalTime:"=?"
     },
     controllerAs: "vm",
-    templateUrl: "js/ops-mgr/overview/job-status-indicator/job-status-indicator-template.html"
+    templateUrl: "./job-status-indicator-template.html"
 });

@@ -1,6 +1,5 @@
 import {HttpClient} from "@angular/common/http";
 import {Injectable} from "@angular/core";
-import {Http, Headers} from '@angular/http';
 import {Observable} from 'rxjs/Observable';
 import 'rxjs/add/observable/of';
 import 'rxjs/add/operator/share';
@@ -8,8 +7,6 @@ import 'rxjs/add/operator/map';
 import 'rxjs/add/observable/forkJoin';
 import {EmptyObservable} from 'rxjs/observable/EmptyObservable';
 import {SchemaParser} from "../../model/field-policy";
-import {IPromise} from "angular";
-
 
 export class OptionMetadata{
     name:string;
@@ -33,8 +30,8 @@ export class FieldPolicyOptionsService {
 
     private static STANDARDIZTION_VALIDATION:string = 'standardization-validation';
     private static SPARK_PARSERS:string ='sparkSchemaParser';
-    private static VALIDATION:string ='validation';
-    private static STANDARDIZATION:string ='standardization';
+    public static VALIDATION:string ='validation';
+    public static STANDARDIZATION:string ='standardization';
     private static SCHEMA_PARSER:string = 'schemaParser';
 
 
@@ -87,8 +84,9 @@ export class FieldPolicyOptionsService {
     }
 
     getOptionsForType(type:string) : Observable<any[]>{
+
         if (type == FieldPolicyOptionsService.STANDARDIZTION_VALIDATION) {
-           return Observable.forkJoin(this.getValidationOptions(),this.getStandardizationOptions())
+           return Observable.forkJoin(this.getStandardizationOptions(),this.getValidationOptions())
         }
         if (type == FieldPolicyOptionsService.STANDARDIZATION) {
             return this.getStandardizationOptions();
@@ -133,6 +131,4 @@ export class FieldPolicyOptionsService {
             return new EmptyObservable();
         }
     }
-
-
 }

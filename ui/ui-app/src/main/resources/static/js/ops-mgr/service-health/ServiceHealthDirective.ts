@@ -2,7 +2,7 @@ import * as angular from "angular";
 import {moduleName} from "./module-name";
 import {DefaultTableOptionsService} from "../../services/TableOptionsService";
 import {DefaultPaginationDataService} from "../../services/PaginationDataService";
-import StateService from "../../services/StateService";
+import {StateService} from "../../services/StateService";
 export class controller implements ng.IComponentController{
         pageName: string;
         //Page State
@@ -181,5 +181,5 @@ angular.module(moduleName).component("tbaServiceHealth", {
         refreshIntervalTime:"@"
     },
     controllerAs: "vm",
-    templateUrl: "js/ops-mgr/service-health/service-health-template.html"
+    templateUrl: "./service-health-template.html"
 });

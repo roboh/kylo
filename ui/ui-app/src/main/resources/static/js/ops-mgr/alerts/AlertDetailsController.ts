@@ -2,9 +2,11 @@ import * as angular from "angular";
 import {moduleName} from "../module-name";
 import * as _ from "underscore";
 import OpsManagerRestUrlService from "../services/OpsManagerRestUrlService";
-import AccessControlService from "../../services/AccessControlService";
+import {AccessControlService} from "../../services/AccessControlService";
 import AccessConstants from '../../constants/AccessConstants';
 import {Transition} from "@uirouter/core";
+import "./module-require";
+import {FEED_DEFINITION_SUMMARY_STATE_NAME} from "../../feed-mgr/model/feed/feed-constants";
 
    /** Manages the Alert Details page.
      * @constructor
@@ -149,7 +151,10 @@ export class AlertDetailsDirectiveController implements ng.IComponentController{
                                 var jobExecutionId = this.alertData.content;
                                 this.alertData.links.push({label: "Job Execution", value: "job-details({executionId:'" + jobExecutionId + "'})"});
                             }
-                            this.alertData.links.push({label:"Feed Details",  value:"ops-feed-details({feedName:'"+this.alertData.entityId+"'})"});
+
+
+
+                            this.alertData.links.push({label:"Feed Details",  value:FEED_DEFINITION_SUMMARY_STATE_NAME+".feed-activity"+"({feedId:'"+this.alertData.entityId+"'})"});
 
                         }
                         else   if(this.alertData.type == 'http://kylo.io/alert/alert/sla/violation') {
@@ -179,7 +184,7 @@ export class AlertDetailsDirectiveController implements ng.IComponentController{
                 },
                 parent: angular.element(document.body),
                 targetEvent: $event,
-                templateUrl: "js/ops-mgr/alerts/event-dialog.html"
+                templateUrl: "./event-dialog.html"
             }).then((result: any)=> {
                 if (result) {
                     this.loadAlert(this.alertData.id);
@@ -250,17 +255,19 @@ export class AlertDetailsController implements ng.IComponentController{
     }
 }
 
-angular.module(moduleName).component("alertDetailsController", {
+const module = angular.module(moduleName).component("alertDetailsController", {
         bindings: {
             $transition$: '<'
         },
         controller: AlertDetailsController,
         controllerAs: "vm",
-        templateUrl: "js/ops-mgr/alerts/alert-details.html"
+        templateUrl: "./alert-details.html"
     });
-angular.module(moduleName).component("alertDetailsDirectiveController", { 
-        controller: AlertDetailsDirectiveController,
-    });
+export default module;
+
+angular.module(moduleName).controller("alertDetailsDirectiveController",
+         AlertDetailsDirectiveController,
+    );
 angular.module(moduleName).directive("tbaAlertDetails",
         [
             ()=> {
@@ -272,11 +279,11 @@ angular.module(moduleName).directive("tbaAlertDetails",
                     },
                     controllerAs: "vm",
                     scope: true,
-                    templateUrl: "js/ops-mgr/alerts/alert-details-template.html",
+                    templateUrl: "./alert-details-template.html",
                     controller: AlertDetailsDirectiveController
                 };
             }
         ]);
-angular.module(moduleName).component("eventDialogController", { 
-        controller: EventDialogController
-    });
+angular.module(moduleName).controller("EventDialogController",
+         EventDialogController
+    );

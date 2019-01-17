@@ -1,6 +1,6 @@
 import * as angular from 'angular';
-import StateService from  "../services/StateService";
-import AccessControlService from "../services/AccessControlService";
+import {StateService} from  "../services/StateService";
+import {AccessControlService} from "../services/AccessControlService";
 import AccessConstants from "../constants/AccessConstants";
 export class HomeController implements ng.IComponentController{
     static readonly $inject = ['$scope', '$mdDialog', 'AccessControlService','StateService'];
@@ -42,10 +42,10 @@ export class HomeController implements ng.IComponentController{
                 return this.StateService.FeedManager().Template().navigateToRegisteredTemplates();
             }
             if (this.accessControlService.hasAction(AccessConstants.USERS_ACCESS, actions)) {
-                return this.StateService.Auth().navigateToUsers();
+                return this.StateService.Auth.navigateToUsers();
             }
             if (this.accessControlService.hasAction(AccessConstants.GROUP_ACCESS, actions)) {
-                return this.StateService.Auth().navigateToGroups();
+                return this.StateService.Auth.navigateToGroups();
             }
 
             /*
@@ -70,6 +70,6 @@ export class HomeController implements ng.IComponentController{
   angular.module('kylo').component("homeController", { 
         controller: HomeController,
         controllerAs: "vm",
-        templateUrl: "js/main/home.html"
+        templateUrl: "./home.html"
     });
 //  .controller('HomeController', [HomeController]);

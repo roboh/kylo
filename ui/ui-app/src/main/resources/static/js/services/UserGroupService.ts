@@ -22,7 +22,7 @@ import * as angular from 'angular';
 import {moduleName} from './module-name';
 import CommonRestUrlService from "./CommonRestUrlService";
 
-export default class UserGroupService{
+export class UserGroupService{
     currentUser: any = null;
 /**
  * Interacts with the Users REST API.
@@ -33,7 +33,7 @@ constructor (private $http: any,
             private $q: any,
             private CommonRestUrlService: any) {
 }
-           getCurrentUser(){
+           getCurrentUser(): Promise<any>{
                 var deferred: any = this.$q.defer();
                 var user : any= {
                     "displayName": null,

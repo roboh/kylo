@@ -1,10 +1,10 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
 import {moduleName} from "../../module-name";
-import AccessControlService from '../../../../services/AccessControlService';
+import {AccessControlService} from '../../../../services/AccessControlService';
 import {StateService} from '@uirouter/core';
 import {RegisterTemplateServiceFactory} from '../../../services/RegisterTemplateServiceFactory';
-import BroadcastService from '../../../../services/broadcast-service';
+import {BroadcastService} from '../../../../services/broadcast-service';
 import {UiComponentsService} from '../../../services/UiComponentsService';
 
 
@@ -20,6 +20,8 @@ export class RegisterSelectTemplateController {
     registeredTemplateId: any;
     nifiTemplateId: any;
     isValid: any;
+    isNew: boolean;
+
     /**
      * Error message to be displayed if {@code isValid} is false
      * @type {null}
@@ -63,6 +65,7 @@ export class RegisterSelectTemplateController {
         this.model = this.registerTemplateService.model;
 
         this.registeredTemplateId = this.model.id;
+        this.isNew = (this.model.nifiTemplateId == undefined);
         this.nifiTemplateId = this.model.nifiTemplateId;
 
         this.isValid = this.registeredTemplateId !== null;
@@ -83,7 +86,7 @@ export class RegisterSelectTemplateController {
         /**
          * Get notified when a already registered template is selected and loaded from the previous screen
          */
-        this.broadcastService.subscribe($scope, "REGISTERED_TEMPLATE_LOADED", this.onRegisteredTemplateLoaded());
+        this.broadcastService.subscribe($scope, "REGISTERED_TEMPLATE_LOADED", () => this.onRegisteredTemplateLoaded());
 
         $scope.$watch(() => {
             return this.model.loading;
@@ -229,7 +232,7 @@ export class RegisterSelectTemplateController {
             fullscreen: true,
             parent: angular.element(document.body),
             scope: $dialogScope,
-            templateUrl: "js/feed-mgr/templates/template-stepper/select-template/template-delete-dialog.html"
+            templateUrl: "./template-delete-dialog.html"
         });
     };
 
@@ -343,7 +346,7 @@ export class RegisterSelectTemplateController {
      */
     matchNiFiTemplateIdWithModel() {
         if (!this.isLoading() && this.model.nifiTemplateId != this.nifiTemplateId) {
-            var matchingTemplate = this.templates.find(function (template: any) {
+            var matchingTemplate = this.templates.find((template: any) => {
                 var found = angular.isDefined(template.templateDto) ? template.templateDto.id == this.model.nifiTemplateId : template.id == this.model.nifiTemplateId;
                 if (!found) {
                     //check on template name
@@ -385,7 +388,7 @@ angular.module(moduleName).component('thinkbigRegisterSelectTemplate', {
         registeredTemplateId: "=?"
     },
     controllerAs: 'vm',
-    templateUrl: 'js/feed-mgr/templates/template-stepper/select-template/select-template.html',
+    templateUrl: './select-template.html',
     controller: RegisterSelectTemplateController,
     require: {
         stepperController: "^thinkbigStepper"

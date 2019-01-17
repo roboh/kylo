@@ -1,7 +1,7 @@
 import * as angular from "angular";
 
 import {moduleName} from "../../module-name";
-import {DomainType} from "../../../services/DomainTypesService.d";
+import {DomainType} from "../../../services/DomainTypesService";
 import {DomainTypeDetailsService} from "../../services/details.service";
 import {AbstractSectionComponent} from "../abstract-section.component";
 
@@ -81,7 +81,7 @@ export class DomainTypeRulesDetailsComponent extends AbstractSectionComponent {
     showFieldRuleDialog(domainType: DomainType) {
         this.$mdDialog.show({
             controller: "FeedFieldPolicyRuleDialogController",
-            templateUrl: "js/feed-mgr/shared/feed-field-policy-rules/define-feed-data-processing-field-policy-dialog.html",
+            templateUrl: "../../../shared/feed-field-policy-rules/define-feed-data-processing-field-policy-dialog.html",
             parent: angular.element(document.body),
             clickOutsideToClose: false,
             fullscreen: true,
@@ -109,5 +109,5 @@ angular.module(moduleName)
             model: "<"
         },
         controller: DomainTypeRulesDetailsComponent,
-        templateUrl: "js/feed-mgr/domain-types/details/rules/rules.component.html"
+        templateUrl: "./rules.component.html"
     });

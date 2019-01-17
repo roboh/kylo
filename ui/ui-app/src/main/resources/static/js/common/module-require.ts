@@ -21,7 +21,7 @@ import "./ui-router-breadcrumbs/ui-router-breadcrumbs";
 import "./kylo-options/kylo-options";
 import "./vertical-section-layout/vertical-section-layout-directive";
 import "./dir-pagination/dirPagination-arrows";
-import "./browser-height/browser-height";
+import "./browser-height/angular1";
 import "./options-menu/OptionsMenu";
 import "./string-to-number/string-to-number";
 import "./utils/IDGenerator";
@@ -33,7 +33,8 @@ import "./accordion-menu/accordion-menu";
 import "./accordion-menu/menu_toggle";
 import "./accordion-menu/menulink";
 import "./timer/kylo-timer";
-import "./multiple-email-validator/multiple-email-validator.js";
+import "./loading-dialog/loading-dialog"
+// import "./multiple-email-validator/multiple-email-validator.js";
 import "./lazy-load-retain-order/lazy-load-retain-order";
 import "./notifications/angular1";
 import "jquery";

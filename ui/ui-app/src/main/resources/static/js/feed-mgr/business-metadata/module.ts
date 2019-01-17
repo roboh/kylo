@@ -12,8 +12,8 @@ class ModuleFactory  {
     constructor () {
         this.module = angular.module(moduleName,[]); 
         this.module.config(['$stateProvider','$compileProvider',this.configFn.bind(this)]);
-      
     }
+
     configFn($stateProvider:any, $compileProvider: any) {
         //preassign modules until directives are rewritten to use the $onInit method.
         //https://docs.angularjs.org/guide/migration#migrating-from-1-5-to-1-6
@@ -28,7 +28,17 @@ class ModuleFactory  {
                 }
             },
             resolve: {
-                loadMyCtrl: this.lazyLoadController(['feed-mgr/business-metadata/BusinessMetadataController'])
+                // loadMyCtrl: this.lazyLoadController(['./BusinessMetadataController'])
+                loadMyCtrl: ['$ocLazyLoad', ($ocLazyLoad: any) => {
+                    return import(/* webpackChunkName: "feedmgr.business-metadata.controller" */ './BusinessMetadataController')
+                        .then(mod => {
+
+                            return $ocLazyLoad.load(mod.default)
+                        })
+                        .catch(err => {
+                            throw new Error("Failed to load BusinessMetadataController, " + err);
+                        });
+                }]
             },
             data: {
                 breadcrumbRoot: false,
@@ -38,14 +48,7 @@ class ModuleFactory  {
             }
         });
     }  
-
-   
-    
-    lazyLoadController(path:any){
-        return lazyLoadUtil.lazyLoadController(path,"feed-mgr/business-metadata/module-require");
-    }
-
-} 
+}
 const module = new ModuleFactory();
 export default module;
 

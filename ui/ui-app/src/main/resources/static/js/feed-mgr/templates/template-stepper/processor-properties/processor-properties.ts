@@ -4,6 +4,7 @@ import { moduleName } from "../../module-name";
 import { RegisterTemplateServiceFactory } from '../../../services/RegisterTemplateServiceFactory';
 import { UiComponentsService } from '../../../services/UiComponentsService';
 import { FeedService } from '../../../services/FeedService';
+import {RegisterTemplatePropertyService} from "../../../services/RegisterTemplatePropertyService";
 
 export class RegisterProcessorPropertiesController {
 
@@ -43,22 +44,23 @@ export class RegisterProcessorPropertiesController {
 
     static readonly $inject = ["$scope", "$element", "$http", "$q", "$mdToast",
         "$location", "$window", "RestUrlService", "RegisterTemplateService",
-        "FeedService", "UiComponentsService"];
+        "FeedService", "UiComponentsService","RegisterTemplatePropertyService"];
 
     constructor(private $scope: IScope, private $element: any, private $http: angular.IHttpService, private $q: angular.IQService, private $mdToast: angular.material.IToastService
         , private $location: angular.ILocationService, private $window: angular.IWindowService, private RestUrlService: any, private registerTemplateService: RegisterTemplateServiceFactory
-        , private feedService: FeedService, private uiComponentsService: UiComponentsService) {
+        , private feedService: FeedService, private uiComponentsService: UiComponentsService,
+                private registerTemplatePropertyService :RegisterTemplatePropertyService) {
 
         this.model = registerTemplateService.model;
 
 
-        this.availableExpressionProperties = registerTemplateService.propertyList;
+        this.availableExpressionProperties = registerTemplatePropertyService.propertyList;
 
 
         this.expressionProperties = this.availableExpressionProperties;
 
         $scope.$watch(() => {
-            return this.registerTemplateService.codemirrorTypes;
+            return this.registerTemplatePropertyService.codemirrorTypes;
         }, (newVal: any) => {
             this.initializeRenderTypes();
         })
@@ -74,13 +76,13 @@ export class RegisterProcessorPropertiesController {
         $scope.$watch(() => {
             return this.model.templateTableOption;
         }, () => {
-            if (this.model.templateTableOption !== "NO_TABLE" && angular.isArray(this.registerTemplateService.propertyList)) {
+            if (this.model.templateTableOption !== "NO_TABLE" && angular.isArray(this.registerTemplatePropertyService.propertyList)) {
                 this.uiComponentsService.getTemplateTableOptionMetadataProperties(this.model.templateTableOption)
                     .then((tableOptionMetadataProperties: any) => {
-                        this.availableExpressionProperties = this.registerTemplateService.propertyList.concat(tableOptionMetadataProperties);
+                        this.availableExpressionProperties = this.registerTemplatePropertyService.propertyList.concat(tableOptionMetadataProperties);
                     });
             } else {
-                this.availableExpressionProperties = this.registerTemplateService.propertyList;
+                this.availableExpressionProperties = this.registerTemplatePropertyService.propertyList;
             }
         });
     };
@@ -204,11 +206,44 @@ export class RegisterProcessorPropertiesController {
 
 
     initializeRenderTypes = () => {
-        angular.forEach(this.registerTemplateService.codemirrorTypes, (label: any, type: any) => {
+        angular.forEach(this.registerTemplatePropertyService.codemirrorTypes, (label: any, type: any) => {
             this.propertyRenderTypes.push({ type: type, label: label, codemirror: true });
         });
     }
 
+
+    /**
+     * Is property registration change info available from Kylo services?
+     * @param property
+     * @returns {boolean}
+     */
+    registrationChangeInfoAvailable(property: any): boolean {
+        return ((property.registrationChangeInfo != null)
+            && (
+            (property.registrationChangeInfo.valueFromNewerNiFiTemplate != null)
+            || (property.registrationChangeInfo.valueFromOlderNiFiTemplate != null)
+            || (property.registrationChangeInfo.valueRegisteredInKyloTemplateFromOlderNiFiTemplate != null)));
+    }
+
+    /**
+     * Should option to accept property value from NiFi template be presented?
+     * @param property
+     * @returns {boolean}
+     */
+    allowUserToAcceptPropertyValueFromNiFi(property: any): boolean {
+        return ((this.registrationChangeInfoAvailable(property))
+            && (property.registrationChangeInfo.valueFromNewerNiFiTemplate != property.registrationChangeInfo.valueFromOlderNiFiTemplate)
+        && (property.registrationChangeInfo.valueFromOlderNiFiTemplate != property.registrationChangeInfo.valueRegisteredInKyloTemplateFromOlderNiFiTemplate)
+        && (property.value != property.registrationChangeInfo.valueFromNewerNiFiTemplate));
+    }
+
+    /**
+     * Update property value to match value defined in NiFi template
+     * @param property
+     */
+    acceptPropertyValueFromNiFi(property: any): void {
+        property.value = property.registrationChangeInfo.valueFromNewerNiFiTemplate;
+    }
 }
 angular.module(moduleName)
     .component('thinkbigRegisterProcessorProperties', {
@@ -218,6 +253,6 @@ angular.module(moduleName)
             processorPropertiesFieldName: '@'
         },
         controllerAs: 'vm',
-        templateUrl: 'js/feed-mgr/templates/template-stepper/processor-properties/processor-properties.html',
+        templateUrl: './processor-properties.html',
         controller: RegisterProcessorPropertiesController,
     });

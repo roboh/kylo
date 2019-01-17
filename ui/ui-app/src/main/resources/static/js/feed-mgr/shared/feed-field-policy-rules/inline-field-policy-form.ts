@@ -1,6 +1,6 @@
 import * as angular from 'angular';
 import * as _ from "underscore";
-const moduleName = require('feed-mgr/module-name');
+import {moduleName} from "../../module-name";;
 
 
 
@@ -102,7 +102,7 @@ angular.module(moduleName)
     .component('inlineFieldPolicyForm', {
         controller: InlineFieldPolicyFormController,
         controllerAs : 'vm',
-        templateUrl: 'js/feed-mgr/shared/feed-field-policy-rules/inline-field-policy-form.html',
+        templateUrl: './inline-field-policy-form.html',
         bindings: {
             ngModel: '=',
             policyParameter: '@',

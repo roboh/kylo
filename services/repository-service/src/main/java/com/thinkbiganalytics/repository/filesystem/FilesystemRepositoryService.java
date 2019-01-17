@@ -9,9 +9,9 @@ package com.thinkbiganalytics.repository.filesystem;
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,50 +21,77 @@ package com.thinkbiganalytics.repository.filesystem;
  */
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.cache.Cache;
 import com.thinkbiganalytics.feedmgr.rest.model.ImportComponentOption;
 import com.thinkbiganalytics.feedmgr.rest.model.ImportTemplateOptions;
+import com.thinkbiganalytics.feedmgr.rest.model.RegisteredTemplate;
 import com.thinkbiganalytics.feedmgr.service.UploadProgressService;
 import com.thinkbiganalytics.feedmgr.service.template.RegisteredTemplateService;
+import com.thinkbiganalytics.feedmgr.service.template.TemplateModelTransform;
 import com.thinkbiganalytics.feedmgr.service.template.importing.TemplateImporter;
 import com.thinkbiganalytics.feedmgr.service.template.importing.TemplateImporterFactory;
 import com.thinkbiganalytics.feedmgr.service.template.importing.model.ImportTemplate;
 import com.thinkbiganalytics.feedmgr.util.ImportUtil;
 import com.thinkbiganalytics.json.ObjectMapperSerializer;
+import com.thinkbiganalytics.metadata.api.MetadataAccess;
+import com.thinkbiganalytics.metadata.api.event.MetadataChange;
+import com.thinkbiganalytics.metadata.api.event.MetadataEventListener;
+import com.thinkbiganalytics.metadata.api.event.MetadataEventService;
+import com.thinkbiganalytics.metadata.api.event.template.TemplateChange;
+import com.thinkbiganalytics.metadata.api.event.template.TemplateChangeEvent;
 import com.thinkbiganalytics.metadata.api.template.export.ExportTemplate;
 import com.thinkbiganalytics.metadata.api.template.export.TemplateExporter;
-import com.thinkbiganalytics.repository.api.RepositoryItemMetadata;
 import com.thinkbiganalytics.repository.api.RepositoryService;
+import com.thinkbiganalytics.repository.api.TemplateMetadata;
+import com.thinkbiganalytics.repository.api.TemplateMetadataWrapper;
+import com.thinkbiganalytics.repository.api.TemplateRepository;
+import com.thinkbiganalytics.repository.api.TemplateSearchFilter;
+import com.thinkbiganalytics.rest.model.search.SearchResult;
+import com.thinkbiganalytics.rest.model.search.SearchResultImpl;
 
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.util.DigestUtils;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import javax.annotation.PostConstruct;
 import javax.inject.Inject;
 
+import static com.thinkbiganalytics.repository.api.TemplateRepository.RepositoryType.FILESYSTEM;
+import static com.thinkbiganalytics.repository.api.TemplateSearchFilter.TemplateComparator.NAME;
+import static com.thinkbiganalytics.repository.api.TemplateSearchFilter.TemplateComparator.valueOf;
+
 @Service
-@PropertySource("classpath:filesystem-repository.properties")
+@PropertySource(value = "classpath:application.properties")
 public class FilesystemRepositoryService implements RepositoryService {
 
     private static final Logger log = LoggerFactory.getLogger(FilesystemRepositoryService.class);
-
-    @Value("#{'${template.dirs}'.split(',')}")
-    private List<String> templateDirs;
 
     @Inject
     TemplateImporterFactory templateImporterFactory;
@@ -78,40 +105,101 @@ public class FilesystemRepositoryService implements RepositoryService {
     @Inject
     TemplateExporter templateExporter;
 
-    ObjectMapper mapper = new ObjectMapper();
+    @Autowired
+    ResourceLoader resourceLoader;
 
-    @Override
-    public List<RepositoryItemMetadata> listTemplates() {
-        //get JSON files from samples directory
-        List<RepositoryItemMetadata> metadataList = new ArrayList<>();
-        findFiles(metadataList);
+    @Inject
+    Cache<String, Boolean> templateUpdateInfoCache;
 
-        Set<String> registeredTemplates = registeredTemplateService.getRegisteredTemplates().stream().map(t -> t.getTemplateName()).collect(Collectors.toSet());
+    @Inject
+    MetadataEventService eventService;
 
-        metadataList.stream().forEach(m -> m.setInstalled(registeredTemplates.contains(m.getTemplateName())));
+    @Inject
+    RepositoryMonitor repositoryMonitor;
 
-        return metadataList;
+    @Inject
+    ObjectMapper mapper;
+
+    @Value("${kylo.template.repository.default:/opt/kylo/setup/data/templates/nifi-1.0}")
+    String defaultKyloRepository;
+
+    private final MetadataEventListener<TemplateChangeEvent> templateChangedListener = new TemplateChangeRepositoryListener();
+
+    @PostConstruct
+    public void addEventListener() throws Exception {
+        log.info("Template change listener added in fileRepositoryService");
+        eventService.addListener(templateChangedListener);
+
+    }
+
+    @Scheduled(fixedDelay = 5000)
+    public void monitorRepositories() throws Exception {
+        Set<Path> repositoriesToWatch = listRepositories()
+            .stream()
+            .map(repo -> Paths.get(repo.getLocation()))
+            .collect(Collectors.toSet());
+        repositoryMonitor.watchRepositories(repositoriesToWatch);
+        log.info("End of scheduler");
     }
 
     @Override
-    public ImportTemplate importTemplates(String fileName, String uploadKey, String importComponents) throws Exception {
-        validateTemplateDirs();
+    public List<TemplateMetadataWrapper> listTemplates() {
+        List<TemplateMetadataWrapper> repositoryItems = new ArrayList<>();
+        List<TemplateRepository> repositories = listRepositories();
 
-        Optional<Path> opt = templateDirs
+        Set<String> registeredTemplates = registeredTemplateService
+            .getRegisteredTemplates()
+            .stream().map(t -> t.getTemplateName())
+            .collect(Collectors.toSet());
+
+        repositories
             .stream()
-            .map(dir -> Paths.get(dir + "/" + fileName))
-            .filter(p -> Files.exists(p))
+            .filter(r -> StringUtils.isNotBlank(r.getLocation()))
+            .flatMap(r -> {
+                return fileToTemplateConversion(registeredTemplates, r);
+            }).forEach(repositoryItems::add);
+
+        return repositoryItems;
+    }
+
+    private Stream<? extends TemplateMetadataWrapper> fileToTemplateConversion(Set<String> registeredTemplates, TemplateRepository r) {
+        try {
+            return Files.find(Paths.get(r.getLocation()),
+                              1,
+                              (path, attrs) -> attrs.isRegularFile()
+                                               && path.toString().endsWith(".json"))
+                .map(p -> jsonToMetadata(p, r, Optional.of(registeredTemplates)));
+        } catch (Exception e) {
+            log.error("Error reading repository metadata for templates", e);
+        }
+        return Collections.<TemplateMetadataWrapper>emptyList().stream();
+    }
+
+    @Override
+    public ImportTemplate importTemplate(String repositoryName,
+                                         String repositoryType,
+                                         String fileName,
+                                         String uploadKey,
+                                         String importComponents) throws Exception {
+
+        Optional<TemplateRepository> repository = listRepositories()
+            .stream()
+            .filter(r -> StringUtils.equals(r.getName(), repositoryName) &&
+                         StringUtils.equals(r.getType().getKey(), repositoryType))
             .findFirst();
 
-        if (!opt.isPresent()) {
-            throw new RuntimeException("Unable to find file to import: " + fileName);
+        Path filePath = Paths.get(repository.get().getLocation() + "/" + fileName);
+
+        if (!filePath.toFile().exists()) {
+            throw new RuntimeException("Unable to find template file to import: " + fileName);
         }
 
         log.info("Begin template import {}", fileName);
         ImportTemplateOptions options = new ImportTemplateOptions();
         options.setUploadKey(uploadKey);
 
-        byte[] content = ImportUtil.streamToByteArray(new FileInputStream(opt.get().toFile()));
+        byte[] content = ImportUtil.streamToByteArray(new FileInputStream(filePath.toFile()));
+        String checksum = DigestUtils.md5DigestAsHex(content);
         uploadProgressService.newUpload(uploadKey);
         ImportTemplate importTemplate = null;
         TemplateImporter templateImporter = null;
@@ -127,95 +215,261 @@ public class FilesystemRepositoryService implements RepositoryService {
         }
         log.info("End template import {} - {}", fileName, importTemplate.isSuccess());
 
-        return importTemplate;
+        //update template metadata
+        String baseName = FilenameUtils.getBaseName(fileName);
+        Path metadataPath = Paths.get(repository.get().getLocation() + "/" + baseName + ".json");
+        TemplateMetadata templateMetadata = mapper.readValue(metadataPath.toFile(), TemplateMetadata.class);
+        templateMetadata.setChecksum(checksum);
+        long updateTime = importTemplate.getTemplateToImport().getUpdateDate().getTime();
+        templateMetadata.setLastModified(updateTime);
+        templateMetadata.setUpdateAvailable(false);
+        mapper.writer(new DefaultPrettyPrinter()).writeValue(metadataPath.toFile(), templateMetadata);
+        log.info("Generated checksum for {} - {}", templateMetadata.getTemplateName(), checksum);
 
+        templateUpdateInfoCache.put(templateMetadata.getTemplateName(), false);
+        return importTemplate;
     }
 
     @Override
-    public RepositoryItemMetadata publishTemplate(String templateId, boolean overwrite) throws Exception {
-        validateTemplateDirs();
+    public TemplateMetadataWrapper publishTemplate(String repositoryName, String repositoryType, String templateId, boolean overwrite) throws Exception {
 
         //export template
         ExportTemplate zipFile = templateExporter.exportTemplate(templateId);
 
+        //get repository
+        TemplateRepository repository = getRepositoryByNameAndType(repositoryName, repositoryType);
+
         //Check if template already exists
-        Optional<RepositoryItemMetadata> foundMetadataOpt = Optional.empty();
-        for (RepositoryItemMetadata m : listTemplates()) {
-            if (m.getTemplateName().equals(zipFile.getTemplateName())) {
-                foundMetadataOpt = Optional.of(m);
+        Optional<TemplateMetadataWrapper> foundMetadataOpt = Optional.empty();
+        for (TemplateMetadataWrapper item : listTemplatesByRepository(repository)) {
+            if (item.getTemplateName().equals(zipFile.getTemplateName())) {
+                foundMetadataOpt = Optional.of(item);
                 break;
             }
         }
         if (foundMetadataOpt.isPresent()) {
             if (!overwrite) {
-                throw new UnsupportedOperationException("Cannot publish to repository, template with same name already exists");
+                throw new UnsupportedOperationException("Template with same name already exists.");
             }
             log.info("Overwriting template with same name.");
         }
 
-        //create metadata
-        RepositoryItemMetadata
-            metadata =
-            foundMetadataOpt.isPresent() ? foundMetadataOpt.get() : new RepositoryItemMetadata(zipFile.getTemplateName(), zipFile.getDescription(), zipFile.getFileName(), zipFile.isStream());
-        String baseName = FilenameUtils.getBaseName(metadata.getFileName());
-        log.info("Writing metadata for {} template.", metadata.getTemplateName());
-        mapper.writeValue(Paths.get(templateDirs.get(0) + "/" + baseName + ".json").toFile(), metadata);
+        String digest = DigestUtils.md5DigestAsHex(zipFile.getFile());
 
+        Path templatePath = Paths.get(repository.getLocation() + "/" + zipFile.getFileName());
+        TemplateMetadata metadata = new TemplateMetadata(zipFile.getTemplateName(), zipFile.getDescription(),
+                                                         zipFile.getFileName().toString(), digest,
+                                                         zipFile.isStream(), false, templatePath.toFile().lastModified());
+
+        //create repositoryItem
+        TemplateMetadataWrapper
+            templateMetadata =
+            foundMetadataOpt.isPresent()
+            ? foundMetadataOpt.get()
+            : new TemplateMetadataWrapper(metadata);
+        String baseName = FilenameUtils.getBaseName(templateMetadata.getFileName());
         //write file in first of templateLocations
-        log.info("Now publishing template {} to repository.", metadata.getTemplateName());
-        Files.write(Paths.get(templateDirs.get(0) + "/" + metadata.getFileName()), zipFile.getFile());
-        log.info("Finished publishing template {} to repository.", metadata.getTemplateName());
 
-        return metadata;
+        Files.write(templatePath, zipFile.getFile());
+        log.info("Finished publishing template {} to repository {}.", templateMetadata.getTemplateName(), repository.getName());
+
+        return new TemplateMetadataWrapper(metadata);
     }
 
     @Override
-    public byte[] downloadTemplate(String fileName) throws Exception {
-        validateTemplateDirs();
+    public byte[] downloadTemplate(String repositoryName, String repositoryType, String fileName) throws Exception {
+        //get repository
+        TemplateRepository repository = getRepositoryByNameAndType(repositoryName, repositoryType);
+        Path path = Paths.get(repository.getLocation() + "/" + fileName);
 
-        Optional<Path> opt = templateDirs
-            .stream()
-            .map(dir -> Paths.get(dir + "/" + fileName))
-            .filter(p -> Files.exists(p))
-            .findFirst();
-
-        if (!opt.isPresent()) {
+        if (!Files.exists(Paths.get(repository.getLocation() + "/" + fileName))) {
             throw new RuntimeException("File not found for download: " + fileName);
         }
         log.info("Begin template download {}", fileName);
 
-        return ImportUtil.streamToByteArray(new FileInputStream(opt.get().toFile()));
+        return ImportUtil.streamToByteArray(new FileInputStream(path.toFile()));
     }
 
-    private RepositoryItemMetadata jsonToMetadata(Path path) {
+    @Override
+    public List<TemplateRepository> listRepositories() {
+        TypeReference<List<TemplateRepository>> typeReference = new TypeReference<List<TemplateRepository>>() {
+        };
         try {
-            String s = new String(Files.readAllBytes(path));
-            return mapper.readValue(s, RepositoryItemMetadata.class);
-        } catch (IOException e) {
-            log.error("Error reading metadata from {}", e);
+            InputStream is = resourceLoader.getResource("classpath:repositories.json").getInputStream();
+            List<TemplateRepository> repositories = new ArrayList<>();
+            repositories.add(new TemplateRepository("Kylo Repository", defaultKyloRepository, "", FILESYSTEM, true));
+            repositories.addAll(mapper.readValue(is, typeReference));
+            Set<String> set = new HashSet<>(repositories.size());
+
+            return repositories
+                .stream()
+                .filter(r -> StringUtils.isNotBlank(r.getLocation()) && //location must be provided
+                             Files.exists(Paths.get(r.getLocation().trim())) && //location must be valid
+                             set.add(r.getName().trim().toLowerCase() + "_" + r.getType().getKey().trim().toLowerCase())) //unique name per repository type
+                .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("Error reading template repositories", e);
+        }
+
+        return new ArrayList<>();
+    }
+
+    @Override
+    public SearchResult getTemplatesPage(TemplateSearchFilter filter) {
+        SearchResult<TemplateMetadataWrapper> searchResult = new SearchResultImpl<>();
+        List<TemplateMetadataWrapper> templates = listTemplates();
+
+        String sort = filter.getSort();
+
+        List<TemplateMetadataWrapper> data = templates.stream()
+            .sorted(getComparator(sort))
+            .skip(filter.getStart())
+            .limit(filter.getLimit() > 0 ? filter.getLimit() : Integer.MAX_VALUE)
+            .collect(Collectors.toList());
+
+        Long total = new Long(templates.size());
+        searchResult.setData(data);
+        searchResult.setRecordsTotal(total);
+        searchResult.setRecordsFiltered(total);
+        return searchResult;
+    }
+
+    private Comparator<TemplateMetadataWrapper> getComparator(String sort) {
+        return StringUtils.isNotBlank(sort) ?
+               (sort.startsWith("-") ? valueOf(sort.substring(1)).getComparator().reversed() : valueOf(sort).getComparator())
+                                            : NAME.getComparator();
+    }
+
+    private TemplateRepository getRepositoryByNameAndType(String repositoryName, String repositoryType) {
+        return listRepositories()
+            .stream()
+            .filter(r -> StringUtils.equals(r.getName(), repositoryName) && StringUtils.equals(r.getType().getKey(), repositoryType))
+            .findFirst().get();
+    }
+
+    @Override
+    public List<TemplateMetadataWrapper> listTemplatesByRepository(String repositoryType, String repositoryName) throws Exception {
+        TemplateRepository repo = getRepositoryByNameAndType(repositoryName, repositoryType);
+
+        return listTemplatesByRepository(repo);
+    }
+
+    private List<TemplateMetadataWrapper> listTemplatesByRepository(TemplateRepository repository) throws Exception {
+        List<TemplateMetadataWrapper> repositoryItems = new ArrayList<>();
+
+        Set<String> registeredTemplates = registeredTemplateService
+            .getRegisteredTemplates()
+            .stream().map(t -> t.getTemplateName())
+            .collect(Collectors.toSet());
+
+        getMetadataFilesInRepository(repository).stream()
+            .map((p) -> jsonToMetadata(p, repository, Optional.of(registeredTemplates)))
+            .forEach(repositoryItems::add);
+
+        return repositoryItems;
+    }
+
+    private List<Path> getMetadataFilesInRepository(TemplateRepository repository) {
+        try {
+            return Files.find(Paths.get(repository.getLocation()),
+                              1,
+                              (path, attrs) -> attrs.isRegularFile()
+                                               && path.toString().endsWith(".json")).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error reading metadata from repository", e);
+        }
+
+        return Collections.<Path>emptyList();
+    }
+
+    private TemplateMetadataWrapper jsonToMetadata(Path path, TemplateRepository repository, Optional<Set<String>> registeredTemplates) {
+        try {
+            TemplateMetadata templateMetaData = mapper.readValue(path.toFile(), TemplateMetadata.class);
+            TemplateMetadataWrapper wrapper = new TemplateMetadataWrapper(templateMetaData);
+
+            Path templatePath = Paths.get(repository.getLocation() + "/" + templateMetaData.getFileName());
+
+            if (registeredTemplates.isPresent() && registeredTemplates.get().contains(templateMetaData.getTemplateName())) {
+
+                byte[] content = ImportUtil.streamToByteArray(new FileInputStream(templatePath.toFile()));
+                InputStream inputStream = new ByteArrayInputStream(content);
+                ImportTemplate importTemplate = ImportUtil.openZip(templatePath.getFileName().toString(), inputStream);
+                RegisteredTemplate template = importTemplate.getTemplateToImport();
+
+                templateUpdateInfoCache.get(templateMetaData.getTemplateName(), () -> templateMetaData.isUpdateAvailable());
+                //init checksum if not already set
+                //set updated flag if file is modified.
+                if (templateMetaData.getLastModified() < template.getUpdateDate().getTime()) {
+                    String checksum = DigestUtils.md5DigestAsHex(content);
+
+                    //capturing checksum first time or it has actually changed?
+                    boolean templateModified = !StringUtils.equals(templateMetaData.getChecksum(), checksum);
+
+                    templateMetaData.setUpdateAvailable(templateModified);
+                    templateUpdateInfoCache.put(templateMetaData.getTemplateName(), templateModified);
+
+                    mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), templateMetaData);
+                    wrapper = new TemplateMetadataWrapper(templateMetaData);
+                }
+                if(wrapper.isUpdateAvailable()){
+                    wrapper.getUpdates().addAll(template.getChangeComments());
+                }
+                wrapper.setInstalled(true);
+            }
+
+            wrapper.setRepository(repository);
+            return wrapper;
+        } catch (Exception e) {
+            log.error("Error reading metadata", e);
         }
         return null;
     }
 
-    private void findFiles(List<RepositoryItemMetadata> metadataList) {
-        validateTemplateDirs();
+    private class TemplateChangeRepositoryListener implements MetadataEventListener<TemplateChangeEvent> {
 
-        templateDirs.stream().flatMap(dir -> {
-            try {
-                return Files.find(Paths.get(dir),
-                                  Integer.MAX_VALUE,
-                                  (path, attrs) -> attrs.isRegularFile()
-                                                   && path.toString().endsWith(".json"));
-            } catch (Exception e) {
-                log.error("Error reading repository metadata for templates", e);
+        @Override
+        public void notify(TemplateChangeEvent event) {
+            TemplateChange change = event.getData();
+            if (templateUpdateInfoCache.getIfPresent(change.getDescription()) != null) {
+                listRepositories().stream()
+                    .flatMap(repo -> {
+                        return getMetadataFilesInRepository(repo).stream();
+                    })
+                    .filter(path -> {
+                        return updateLastModifiedDate(event, change, path);
+                    })
+                    .findFirst();
             }
-            return Collections.<Path>emptyList().stream();
-        }).map((p) -> jsonToMetadata(p)).forEach(metadataList::add);
-    }
+        }
 
-    private void validateTemplateDirs() {
-        if (templateDirs == null || templateDirs.size() == 0) {
-            throw new RuntimeException("Location for templates or feeds is not set.");
+        private boolean updateLastModifiedDate(TemplateChangeEvent event, TemplateChange change, Path path) {
+            if(change.getChange() == MetadataChange.ChangeType.DELETE){
+                templateUpdateInfoCache.invalidate(change.getDescription());
+                return false;
+            }
+
+            TemplateMetadata metadata = null;
+            try {
+                metadata = mapper.readValue(path.toFile(), TemplateMetadata.class);
+                Principal[] principals = new Principal[1];
+                principals[0] = MetadataAccess.SERVICE;
+
+                RegisteredTemplate foundTemplate = registeredTemplateService
+                        .findRegisteredTemplateByName(change.getDescription(), TemplateModelTransform.TEMPLATE_TRANSFORMATION_TYPE.WITH_FEED_NAMES, principals);
+
+                if (StringUtils.equals(metadata.getTemplateName(), foundTemplate.getTemplateName())) {
+                    metadata.setLastModified(foundTemplate.getUpdateDate().getTime());
+                    metadata.setUpdateAvailable(false);
+                    mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), metadata);
+                    templateUpdateInfoCache.put(change.getDescription(), false);
+                    return true;
+                }
+            } catch (Exception e) {
+                log.info("Error when reading/writing template metadata", e);
+            }
+            return false;
         }
     }
+
 }
